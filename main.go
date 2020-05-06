@@ -88,7 +88,7 @@ type Results struct {
 }
 
 // Get crawles the URLs
-func Get(inChan chan map[string]Done, outChan chan map[string]int, elem, uElem, bElem, rElem string, lenItems int) {
+func Get(inChan chan map[string]Done, outChan chan map[string]int, elem, uElem, bElem, rElem, re string, lenItems int) {
 	doneChan := make(chan Done, lenItems)
 	for urlMap := range inChan {
 		go func(urlMap map[string]Done, doneChan chan Done, outChan chan map[string]int) {
@@ -100,7 +100,7 @@ func Get(inChan chan map[string]Done, outChan chan map[string]int, elem, uElem, 
 				}
 				defer ungzipData.Close()
 
-				parser.HtmlParser(outChan, ungzipData, elem, uElem, bElem, rElem)
+				parser.HtmlParser(outChan, ungzipData, elem, uElem, bElem, rElem, re)
 			}
 			doneChan <- true
 		}(urlMap, doneChan, outChan)
@@ -115,10 +115,12 @@ func Get(inChan chan map[string]Done, outChan chan map[string]int, elem, uElem, 
 
 func main() {
 	const (
-		elem  = "table.gf-header tbody tr"
-		uElem = "td.first a"
-		bElem = "td.blocked"
-		rElem = "td.restricted"
+		elem     = "table.gf-header tbody tr"
+		uElem    = "td.first a"
+		bElem    = "td.blocked"
+		rElem    = "td.restricted"
+		re       = `([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)`
+		filename = "blockedDomains.txt"
 	)
 
 	numCPUs := runtime.NumCPU()
@@ -175,9 +177,9 @@ func main() {
 		close(inputChan)
 	}(crawlItems, inputChan)
 
-	go Get(inputChan, resultChan, elem, uElem, bElem, rElem, lenItems)
+	go Get(inputChan, resultChan, elem, uElem, bElem, rElem, re, lenItems)
 
-	f, err := os.OpenFile("results.txt", os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return
 	}
