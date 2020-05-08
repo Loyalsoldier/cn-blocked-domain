@@ -198,7 +198,7 @@ func main() {
 		rElem             = "td.restricted"
 		re                = `([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)`
 		rawFile           = "raw.txt"
-		filteredFile      = "domains.txt"
+		filteredFile      = "temp-domains.txt"
 		alexaMaxPage      = 7
 		blockedMaxPage    = 935
 		domainsMaxPage    = 1293
