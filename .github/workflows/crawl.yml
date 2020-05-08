@@ -1,0 +1,72 @@
+name: Get blocked domains from Greatfire Analyzer 
+on:
+  schedule:
+    - cron: "0 22 */30 * *"
+  push:
+    branches:
+      - master
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Go 1.14
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.14
+
+      - name: Set $GOPATH and more variables
+        run: |
+          echo "::set-env name=RELEASE_NAME::Released on $(date +%Y%m%d%H%M)"
+          echo "::set-env name=TAG_NAME::$(date +%Y%m%d%H%M)"
+          echo "::set-env name=GOPATH::$(dirname $GITHUB_WORKSPACE)"
+          echo "::add-path::$(dirname $GITHUB_WORKSPACE)/bin"
+          go env -w GO111MODULE=auto
+        shell: bash
+
+      - name: Checkout the "master" branch
+        uses: actions/checkout@v2
+        with:
+          ref: master
+
+      - name: Go get project code & run
+        run: |
+          go get -u -v github.com/${{ github.repository }}
+          cn-blocked-domain
+
+      - name: Remove redundant domains
+        run: |
+          chmod +x findRedundantDomain.py
+          ./findRedundantDomain.py ./temp-domains.txt ./deleted-domains-unsort.txt
+          [ ! -f "deleted-domains-unsort.txt" ] && touch deleted-domains-unsort.txt
+          sort ./deleted-domains-unsort.txt > ./deleted-domains-sort.txt
+          diff ./deleted-domains-sort.txt ./temp-domains.txt | awk '/^>/{print $2}' > ./domains.txt
+
+      - name: Make dir and move file
+        run: |
+          mkdir ./publish
+          cp ./domains.txt ./publish/
+
+      - name: Release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ env.RELEASE_NAME }}
+          tag_name: ${{ env.TAG_NAME }}
+          draft: false
+          prerelease: false
+          files: |
+            ./publish/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Git push assets to "release" branch
+        run: |
+          cd publish
+          git init
+          git config --local user.name "${{ github.actor }}"
+          git config --local user.email "${{ github.actor }}@users.noreply.github.com"
+          git checkout -b release
+          git add .
+          git commit -m "${{ env.RELEASE_NAME }}"
+          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git push -f -u origin release
