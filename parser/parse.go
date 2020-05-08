@@ -2,23 +2,29 @@ package parser
 
 import (
 	"compress/gzip"
-	"fmt"
-	"regexp"
+	"log"
 	"strconv"
 
+	"github.com/Loyalsoldier/cn-blocked-domain/errorer"
 	"github.com/PuerkitoBio/goquery"
 )
 
-func HtmlParser(resultChan chan map[string]int, data *gzip.Reader, elem, uElem, bElem, rElem, re string) {
+// HTMLParser parses webpage content and sends URL & percent map to channel
+func HTMLParser(resultChan chan map[string]int, data *gzip.Reader, elem, uElem, bElem, rElem string) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("Runtime panic: %v\n", err)
+		}
+	}()
+
 	// Load the HTML document
 	doc, err := goquery.NewDocumentFromReader(data)
-	if err != nil {
-		fmt.Println(err)
-	}
+	errorer.CheckError(err)
 
 	// Find items
 	doc.Find(elem).Each(func(i int, s *goquery.Selection) {
 		// For each item found, get contents
+		url, _ := s.Find(uElem).Attr("href")
 		bPerStr := s.Find(bElem).Text()
 		rPerStr := s.Find(rElem).Text()
 
@@ -32,18 +38,8 @@ func HtmlParser(resultChan chan map[string]int, data *gzip.Reader, elem, uElem, 
 			percent = restrictPerNum
 		}
 
-		if percent >= 50 {
-			var domain string
-			url, _ := s.Find(uElem).Attr("href")
-			reg := regexp.MustCompile(re)
-			matchList := reg.FindStringSubmatch(url)
-
-			if len(matchList) > 0 {
-				result := make(map[string]int)
-				domain = matchList[0]
-				result[domain] = percent
-				resultChan <- result
-			}
-		}
+		result := make(map[string]int)
+		result[url] = percent
+		resultChan <- result
 	})
 }

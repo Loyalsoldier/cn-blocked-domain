@@ -2,14 +2,20 @@ package main
 
 import (
 	"bufio"
+	"compress/gzip"
 	"fmt"
+	"log"
 	"os"
+	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"sync"
 
-	crawler "github.com/Loyalsoldier/cn-blocked-domain/crawler"
-	parser "github.com/Loyalsoldier/cn-blocked-domain/parser"
+	"github.com/Loyalsoldier/cn-blocked-domain/crawler"
+	"github.com/Loyalsoldier/cn-blocked-domain/errorer"
+	"github.com/Loyalsoldier/cn-blocked-domain/parser"
+	"github.com/matryer/try"
 )
 
 // LIMIT sets the capacity of channel to contain results
@@ -41,7 +47,7 @@ func (a *AlexaTop1000Type) NewURLList() {
 		fullURL := a.GreatFireURL.BaseURL + a.GreatFireURL.MiddleURL + a.GreatFireURL.SuffixURL + strconv.Itoa(i)
 		a.URLList[fullURL] = false
 	}
-	a.mux.Unlock()
+	defer a.mux.Unlock()
 }
 
 // BlockedType defines the structure of Blocked type of URLs and list
@@ -59,7 +65,7 @@ func (b *BlockedType) NewURLList() {
 		fullURL := b.GreatFireURL.BaseURL + b.GreatFireURL.MiddleURL + b.GreatFireURL.SuffixURL + strconv.Itoa(i)
 		b.URLList[fullURL] = false
 	}
-	b.mux.Unlock()
+	defer b.mux.Unlock()
 }
 
 // DomainsType defines the structure of Domains type of URLs and list
@@ -78,34 +84,57 @@ func (d *DomainsType) NewURLList() {
 		fullURL := d.GreatFireURL.BaseURL + d.GreatFireURL.MiddleURL + d.GreatFireURL.SuffixURL + strconv.Itoa(i)
 		d.URLList[fullURL] = false
 	}
-	d.mux.Unlock()
+	defer d.mux.Unlock()
 }
 
-// Results defines the structure of domain result
-type Results struct {
-	domains []map[string]int
-	mux     sync.Mutex
+// Results defines the structure of domain result map
+type Results map[string]struct{}
+
+// SortAndUnique filters the Results slice
+func (r Results) SortAndUnique() []string {
+	resultSlice := make([]string, 0, len(r))
+	for domainKey := range r {
+		resultSlice = append(resultSlice, domainKey)
+	}
+	sort.Strings(resultSlice)
+	return resultSlice
 }
 
 // Get crawles the URLs
-func Get(inChan chan map[string]Done, outChan chan map[string]int, elem, uElem, bElem, rElem, re string, lenItems int) {
+func Get(inChan chan map[string]Done, outChan chan map[string]int, elem, uElem, bElem, rElem string, lenItems, retryTimes int) {
 	doneChan := make(chan Done, lenItems)
 	for urlMap := range inChan {
-		go func(urlMap map[string]Done, doneChan chan Done, outChan chan map[string]int) {
+		go func(urlMap map[string]Done, doneChan chan Done, outChan chan map[string]int, retryTimes int) {
 			for url := range urlMap {
-				ungzipData, err := crawler.Crawl(url, "https://zh.greatfire.org")
-				if err != nil {
-					// return
-					fmt.Println(err)
-				}
-				defer ungzipData.Close()
+				defer func() {
+					if err := recover(); err != nil {
+						log.Printf("Goroutine panic: fetching %v : %v\n", url, err)
+					}
+				}()
 
-				parser.HtmlParser(outChan, ungzipData, elem, uElem, bElem, rElem, re)
+				var ungzipData *gzip.Reader
+				err := try.Do(func(attempt int) (retry bool, err error) {
+					retry = attempt < retryTimes
+					defer func() {
+						if r := recover(); r != nil {
+							err = fmt.Errorf("panic: %v", r)
+						}
+					}()
+					ungzipData, err = crawler.Crawl(url, "https://zh.greatfire.org")
+					errorer.CheckError(err)
+					return
+				})
+				errorer.CheckError(err)
+				defer ungzipData.Close()
+				parser.HTMLParser(outChan, ungzipData, elem, uElem, bElem, rElem)
 			}
+
+			// Indicate that this goroutine has completed
 			doneChan <- true
-		}(urlMap, doneChan, outChan)
+		}(urlMap, doneChan, outChan, retryTimes)
 	}
 
+	// Wait for all goroutines to be completed
 	for i := 0; i < lenItems; i++ {
 		<-doneChan
 	}
@@ -113,16 +142,68 @@ func Get(inChan chan map[string]Done, outChan chan map[string]int, elem, uElem, 
 	close(outChan)
 }
 
+// ValidateAndWrite filters urlMap from resultChan and writes it to files
+func ValidateAndWrite(resultChan chan map[string]int, resultMap Results, filteredFile, rawFile, re string, percentStd int) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("Runtime panic: %v\n", err)
+		}
+	}()
+
+	f, err := os.OpenFile(rawFile, os.O_WRONLY|os.O_CREATE, 0644)
+	errorer.CheckError(err)
+	defer f.Close()
+
+	g, err := os.OpenFile(filteredFile, os.O_WRONLY|os.O_CREATE, 0644)
+	errorer.CheckError(err)
+	defer g.Close()
+
+	for result := range resultChan {
+		for url, percent := range result {
+			// Write raw result to raw.txt file
+			w := bufio.NewWriter(f)
+			w.WriteString(fmt.Sprintf("%s | %d\n", url, percent))
+			w.Flush()
+
+			if percent >= percentStd {
+				var domain string
+				reg := regexp.MustCompile(re)
+				matchList := reg.FindStringSubmatch(url)
+
+				if len(matchList) > 0 {
+					domain = matchList[0]
+					// Write filtered result to console
+					fmt.Printf("%s | %d\n", domain, percent)
+					// Write filtered result to Results type variable resultMap
+					resultMap[domain] = struct{}{}
+				}
+			}
+		}
+	}
+
+	resultSlice := resultMap.SortAndUnique()
+	for _, domain := range resultSlice {
+		// Write filtered result to blockedDomains.txt file
+		x := bufio.NewWriter(g)
+		x.WriteString(domain + "\n")
+		x.Flush()
+	}
+}
+
 func main() {
 	const (
-		elem     = "table.gf-header tbody tr"
-		uElem    = "td.first a"
-		bElem    = "td.blocked"
-		rElem    = "td.restricted"
-		re       = `([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)`
-		filename = "blockedDomains.txt"
+		elem         = "table.gf-header tbody tr"
+		uElem        = "td.first a"
+		bElem        = "td.blocked"
+		rElem        = "td.restricted"
+		re           = `([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)`
+		rawFile      = "raw.txt"
+		filteredFile = "blockedDomains.txt"
+		percentStd   = 50
+		retryTimes   = 3
 	)
 
+	// Set Go processes no less than 8
 	numCPUs := runtime.NumCPU()
 	if numCPUs < 8 {
 		numCPUs = 8
@@ -180,20 +261,8 @@ func main() {
 		close(inputChan)
 	}(crawlItems, inputChan)
 
-	go Get(inputChan, resultChan, elem, uElem, bElem, rElem, re, lenItems)
+	go Get(inputChan, resultChan, elem, uElem, bElem, rElem, lenItems, retryTimes)
 
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
-	for result := range resultChan {
-		for url, percent := range result {
-			w := bufio.NewWriter(f)
-			w.WriteString(fmt.Sprintf("%s | %d\n", url, percent))
-			w.Flush()
-			fmt.Printf("%s | %d\n", url, percent)
-		}
-	}
+	var resultMap Results = make(map[string]struct{})
+	ValidateAndWrite(resultChan, resultMap, filteredFile, rawFile, re, percentStd)
 }

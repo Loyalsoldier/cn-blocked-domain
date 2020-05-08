@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// Crawl crawls webpage content and returns *gzip.Reader
 func Crawl(url, ref string) (*gzip.Reader, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -25,5 +26,5 @@ func Crawl(url, ref string) (*gzip.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ungzipData, err
+	return ungzipData, nil
 }
