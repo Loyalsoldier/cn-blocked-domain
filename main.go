@@ -209,9 +209,9 @@ func main() {
 
 	// Set Go processes no less than 8
 	numCPUs := runtime.NumCPU()
-	if numCPUs < 8 {
-		numCPUs = 8
-	}
+	// if numCPUs < 8 {
+	// 	numCPUs = 8
+	// }
 	runtime.GOMAXPROCS(numCPUs)
 
 	alexaTop1000 := &AlexaTop1000Type{
