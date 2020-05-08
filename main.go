@@ -72,7 +72,7 @@ func (b *BlockedType) NewURLList() {
 type DomainsType struct {
 	GreatFireURL *GreatFireURL
 	URLList      map[string]Done
-	StopPage     int
+	StopAtPage   int
 	mux          sync.RWMutex
 }
 
@@ -192,15 +192,19 @@ func ValidateAndWrite(resultChan chan map[string]int, resultMap Results, filtere
 
 func main() {
 	const (
-		elem         = "table.gf-header tbody tr"
-		uElem        = "td.first a"
-		bElem        = "td.blocked"
-		rElem        = "td.restricted"
-		re           = `([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)`
-		rawFile      = "raw.txt"
-		filteredFile = "blockedDomains.txt"
-		percentStd   = 50
-		retryTimes   = 3
+		elem              = "table.gf-header tbody tr"
+		uElem             = "td.first a"
+		bElem             = "td.blocked"
+		rElem             = "td.restricted"
+		re                = `([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)`
+		rawFile           = "raw.txt"
+		filteredFile      = "domains.txt"
+		alexaMaxPage      = 7
+		blockedMaxPage    = 935
+		domainsMaxPage    = 1293
+		domainsStopAtPage = 123
+		percentStd        = 50 // set the min percent to filter domains
+		retryTimes        = 3  // set crawler max retry times
 	)
 
 	// Set Go processes no less than 8
@@ -215,22 +219,22 @@ func main() {
 			BaseURL:   "https://zh.greatfire.org/search/",
 			MiddleURL: "alexa-top-1000-domains",
 			SuffixURL: "?page=",
-			MaxPage:   7}}
+			MaxPage:   alexaMaxPage}}
 
 	blocked := &BlockedType{
 		GreatFireURL: &GreatFireURL{
 			BaseURL:   "https://zh.greatfire.org/search/",
 			MiddleURL: "blocked",
 			SuffixURL: "?page=",
-			MaxPage:   13}}
+			MaxPage:   blockedMaxPage}}
 
 	domains := &DomainsType{
-		StopPage: 123,
+		StopAtPage: domainsStopAtPage,
 		GreatFireURL: &GreatFireURL{
 			BaseURL:   "https://zh.greatfire.org/search/",
 			MiddleURL: "domains",
 			SuffixURL: "?page=",
-			MaxPage:   1292}}
+			MaxPage:   domainsMaxPage}}
 
 	alexaTop1000.NewURLList()
 	blocked.NewURLList()
@@ -245,10 +249,10 @@ func main() {
 		item := map[string]Done{url: isDone}
 		crawlItems = append(crawlItems, item)
 	}
-	// for url, isDone := range domains.URLList {
-	// 	item := map[string]Done{url: isDone}
-	// 	crawlItems = append(crawlItems, item)
-	// }
+	for url, isDone := range domains.URLList {
+		item := map[string]Done{url: isDone}
+		crawlItems = append(crawlItems, item)
+	}
 	lenItems := len(crawlItems)
 
 	inputChan := make(chan map[string]Done, numCPUs)
