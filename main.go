@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Loyalsoldier/cn-blocked-domain/crawler"
@@ -91,47 +92,30 @@ func (d *DomainsType) NewURLList() {
 type Results map[string]struct{}
 
 // SortAndUnique filters the Results slice
-func (r Results) SortAndUnique() []string {
+func (r Results) SortAndUnique(reForIP string) []string {
 	resultSlice := make([]string, 0, len(r))
+	reg := regexp.MustCompile(reForIP)
 	for domainKey := range r {
+		matchList := reg.FindStringSubmatch(domainKey)
+		if len(matchList) > 0 {
+			continue
+		}
 		resultSlice = append(resultSlice, domainKey)
 	}
 	sort.Strings(resultSlice)
 	return resultSlice
 }
 
-// Get crawles the URLs
-func Get(inChan chan map[string]Done, outChan chan map[string]int, elem, uElem, bElem, rElem string, lenItems, retryTimes int) {
+// ControlFlow controls the crawl process
+func ControlFlow(crawlItems []map[string]Done, outChan chan map[string]int, elem, uElem, bElem, rElem string, lenItems, retryTimes, numCPUs int) {
+	maxGoRoutinesChan := make(chan int, numCPUs)
 	doneChan := make(chan Done, lenItems)
-	for urlMap := range inChan {
-		go func(urlMap map[string]Done, doneChan chan Done, outChan chan map[string]int, retryTimes int) {
-			for url := range urlMap {
-				defer func() {
-					if err := recover(); err != nil {
-						log.Printf("Goroutine panic: fetching %v : %v\n", url, err)
-					}
-				}()
 
-				var ungzipData *gzip.Reader
-				err := try.Do(func(attempt int) (retry bool, err error) {
-					retry = attempt < retryTimes
-					defer func() {
-						if r := recover(); r != nil {
-							err = fmt.Errorf("panic: %v", r)
-						}
-					}()
-					ungzipData, err = crawler.Crawl(url, "https://zh.greatfire.org")
-					errorer.CheckError(err)
-					return
-				})
-				errorer.CheckError(err)
-				defer ungzipData.Close()
-				parser.HTMLParser(outChan, ungzipData, elem, uElem, bElem, rElem)
-			}
-
-			// Indicate that this goroutine has completed
-			doneChan <- true
-		}(urlMap, doneChan, outChan, retryTimes)
+	for _, urlMap := range crawlItems {
+		maxGoRoutinesChan <- 1
+		for url := range urlMap {
+			go CrawlAndProcessPage(url, outChan, doneChan, maxGoRoutinesChan, elem, uElem, bElem, rElem, retryTimes)
+		}
 	}
 
 	// Wait for all goroutines to be completed
@@ -142,8 +126,39 @@ func Get(inChan chan map[string]Done, outChan chan map[string]int, elem, uElem, 
 	close(outChan)
 }
 
+// CrawlAndProcessPage crawls a URL page and processes it
+func CrawlAndProcessPage(url string, outChan chan map[string]int, doneChan chan Done, maxGoRoutinesChan chan int, elem, uElem, bElem, rElem string, retryTimes int) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("Goroutine panic: fetching %v : %v\n", url, err)
+		}
+	}()
+
+	var ungzipData *gzip.Reader
+	err := try.Do(func(attempt int) (retry bool, err error) {
+		retry = attempt < retryTimes
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic: %v", r)
+			}
+		}()
+		ungzipData, err = crawler.Crawl(url, "https://zh.greatfire.org")
+		errorer.CheckError(err)
+		return
+	})
+	errorer.CheckError(err)
+	defer ungzipData.Close()
+
+	parser.HTMLParser(outChan, ungzipData, elem, uElem, bElem, rElem)
+
+	// Indicate that this goroutine has completed
+	doneChan <- true
+	// Indicate that there is one free space in goroutine list
+	<-maxGoRoutinesChan
+}
+
 // ValidateAndWrite filters urlMap from resultChan and writes it to files
-func ValidateAndWrite(resultChan chan map[string]int, resultMap Results, filteredFile, rawFile, re string, percentStd int) {
+func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re, reForIP string, percentStd int) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("Runtime panic: %v\n", err)
@@ -158,8 +173,10 @@ func ValidateAndWrite(resultChan chan map[string]int, resultMap Results, filtere
 	errorer.CheckError(err)
 	defer g.Close()
 
+	var resultMap Results = make(map[string]struct{})
 	for result := range resultChan {
 		for url, percent := range result {
+			url = strings.ToLower(url)
 			// Write raw result to raw.txt file
 			w := bufio.NewWriter(f)
 			w.WriteString(fmt.Sprintf("%s | %d\n", url, percent))
@@ -181,9 +198,9 @@ func ValidateAndWrite(resultChan chan map[string]int, resultMap Results, filtere
 		}
 	}
 
-	resultSlice := resultMap.SortAndUnique()
+	resultSlice := resultMap.SortAndUnique(reForIP)
 	for _, domain := range resultSlice {
-		// Write filtered result to blockedDomains.txt file
+		// Write filtered result to temp-domains.txt file
 		x := bufio.NewWriter(g)
 		x.WriteString(domain + "\n")
 		x.Flush()
@@ -197,6 +214,7 @@ func main() {
 		bElem             = "td.blocked"
 		rElem             = "td.restricted"
 		re                = `([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)`
+		reForIP           = `(([0-9]{1,3}\.){3}[0-9]{1,3})`
 		rawFile           = "raw.txt"
 		filteredFile      = "temp-domains.txt"
 		alexaMaxPage      = 7
@@ -207,11 +225,11 @@ func main() {
 		retryTimes        = 3  // set crawler max retry times
 	)
 
-	// Set Go processes no less than 8
+	// Set Go processors no less than 8
 	numCPUs := runtime.NumCPU()
-	// if numCPUs < 8 {
-	// 	numCPUs = 8
-	// }
+	if numCPUs < 8 {
+		numCPUs = 8
+	}
 	runtime.GOMAXPROCS(numCPUs)
 
 	alexaTop1000 := &AlexaTop1000Type{
@@ -253,20 +271,10 @@ func main() {
 		item := map[string]Done{url: isDone}
 		crawlItems = append(crawlItems, item)
 	}
-	lenItems := len(crawlItems)
 
-	inputChan := make(chan map[string]Done, numCPUs)
+	lenItems := len(crawlItems)
 	resultChan := make(chan map[string]int, LIMIT)
 
-	go func(crawlItems []map[string]Done, inputChan chan map[string]Done) {
-		for _, item := range crawlItems {
-			inputChan <- item
-		}
-		close(inputChan)
-	}(crawlItems, inputChan)
-
-	go Get(inputChan, resultChan, elem, uElem, bElem, rElem, lenItems, retryTimes)
-
-	var resultMap Results = make(map[string]struct{})
-	ValidateAndWrite(resultChan, resultMap, filteredFile, rawFile, re, percentStd)
+	go ControlFlow(crawlItems, resultChan, elem, uElem, bElem, rElem, lenItems, retryTimes, numCPUs)
+	ValidateAndWrite(resultChan, filteredFile, rawFile, re, reForIP, percentStd)
 }
