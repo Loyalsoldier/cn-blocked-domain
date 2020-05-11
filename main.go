@@ -16,6 +16,7 @@ import (
 	"github.com/Loyalsoldier/cn-blocked-domain/crawler"
 	"github.com/Loyalsoldier/cn-blocked-domain/errorer"
 	"github.com/Loyalsoldier/cn-blocked-domain/parser"
+	"github.com/Loyalsoldier/cn-blocked-domain/utils"
 	"github.com/matryer/try"
 )
 
@@ -36,17 +37,17 @@ type GreatFireURL struct {
 // AlexaTop1000Type defines the structure of AlexaTop1000 type of URLs and list
 type AlexaTop1000Type struct {
 	GreatFireURL *GreatFireURL
-	URLList      map[string]Done
+	URLList      []string
 	mux          sync.RWMutex
 }
 
 // NewURLList returns the URLs of type AlexaTop1000 to be crawled
 func (a *AlexaTop1000Type) NewURLList() {
 	a.mux.Lock()
-	a.URLList = make(map[string]Done)
+	a.URLList = make([]string, 0)
 	for i := 0; i < a.GreatFireURL.MaxPage; i++ {
 		fullURL := a.GreatFireURL.BaseURL + a.GreatFireURL.MiddleURL + a.GreatFireURL.SuffixURL + strconv.Itoa(i)
-		a.URLList[fullURL] = false
+		a.URLList = append(a.URLList, fullURL)
 	}
 	defer a.mux.Unlock()
 }
@@ -54,17 +55,17 @@ func (a *AlexaTop1000Type) NewURLList() {
 // BlockedType defines the structure of Blocked type of URLs and list
 type BlockedType struct {
 	GreatFireURL *GreatFireURL
-	URLList      map[string]Done
+	URLList      []string
 	mux          sync.RWMutex
 }
 
 // NewURLList returns the URLs of type Blocked to be crawled
 func (b *BlockedType) NewURLList() {
 	b.mux.Lock()
-	b.URLList = make(map[string]Done)
+	b.URLList = make([]string, 0)
 	for i := 0; i < b.GreatFireURL.MaxPage; i++ {
 		fullURL := b.GreatFireURL.BaseURL + b.GreatFireURL.MiddleURL + b.GreatFireURL.SuffixURL + strconv.Itoa(i)
-		b.URLList[fullURL] = false
+		b.URLList = append(b.URLList, fullURL)
 	}
 	defer b.mux.Unlock()
 }
@@ -72,7 +73,7 @@ func (b *BlockedType) NewURLList() {
 // DomainsType defines the structure of Domains type of URLs and list
 type DomainsType struct {
 	GreatFireURL *GreatFireURL
-	URLList      map[string]Done
+	URLList      []string
 	StopAtPage   int
 	mux          sync.RWMutex
 }
@@ -80,10 +81,10 @@ type DomainsType struct {
 // NewURLList returns the URLs of type Domains to be crawled
 func (d *DomainsType) NewURLList() {
 	d.mux.Lock()
-	d.URLList = make(map[string]Done)
+	d.URLList = make([]string, 0)
 	for i := 0; i < d.GreatFireURL.MaxPage; i++ {
 		fullURL := d.GreatFireURL.BaseURL + d.GreatFireURL.MiddleURL + d.GreatFireURL.SuffixURL + strconv.Itoa(i)
-		d.URLList[fullURL] = false
+		d.URLList = append(d.URLList, fullURL)
 	}
 	defer d.mux.Unlock()
 }
@@ -107,15 +108,13 @@ func (r Results) SortAndUnique(reForIP string) []string {
 }
 
 // ControlFlow controls the crawl process
-func ControlFlow(crawlItems []map[string]Done, outChan chan map[string]int, elem, uElem, bElem, rElem string, lenItems, retryTimes, numCPUs int) {
+func ControlFlow(crawlItems []string, outChan chan map[string]int, elem, uElem, bElem, rElem string, lenItems, retryTimes, numCPUs int) {
 	maxGoRoutinesChan := make(chan int, numCPUs)
 	doneChan := make(chan Done, lenItems)
 
-	for _, urlMap := range crawlItems {
+	for _, url := range crawlItems {
 		maxGoRoutinesChan <- 1
-		for url := range urlMap {
-			go CrawlAndProcessPage(url, outChan, doneChan, maxGoRoutinesChan, elem, uElem, bElem, rElem, retryTimes)
-		}
+		go CrawlAndProcessPage(url, outChan, doneChan, maxGoRoutinesChan, elem, uElem, bElem, rElem, retryTimes)
 	}
 
 	// Wait for all goroutines to be completed
@@ -142,6 +141,12 @@ func CrawlAndProcessPage(url string, outChan chan map[string]int, doneChan chan 
 				err = fmt.Errorf("panic: %v", r)
 			}
 		}()
+
+		if attempt > 1 {
+			log.Println(utils.Fatal(attempt), "time, crawling URL:", utils.Info(url))
+		}
+		log.Println(utils.Warning(attempt), "time, crawling URL:", utils.Info(url))
+
 		ungzipData, err = crawler.Crawl(url, "https://zh.greatfire.org")
 		errorer.CheckError(err)
 		return
@@ -227,8 +232,8 @@ func main() {
 
 	// Set Go processors no less than 16
 	numCPUs := runtime.NumCPU()
-	if numCPUs < 16 {
-		numCPUs = 16
+	if numCPUs < 8 {
+		numCPUs = 8
 	}
 	runtime.GOMAXPROCS(numCPUs)
 
@@ -258,18 +263,15 @@ func main() {
 	blocked.NewURLList()
 	domains.NewURLList()
 
-	crawlItems := make([]map[string]Done, 0)
-	for url, isDone := range alexaTop1000.URLList {
-		item := map[string]Done{url: isDone}
-		crawlItems = append(crawlItems, item)
+	crawlItems := make([]string, 0)
+	for _, url := range alexaTop1000.URLList {
+		crawlItems = append(crawlItems, url)
 	}
-	for url, isDone := range blocked.URLList {
-		item := map[string]Done{url: isDone}
-		crawlItems = append(crawlItems, item)
+	for _, url := range blocked.URLList {
+		crawlItems = append(crawlItems, url)
 	}
-	for url, isDone := range domains.URLList {
-		item := map[string]Done{url: isDone}
-		crawlItems = append(crawlItems, item)
+	for _, url := range domains.URLList {
+		crawlItems = append(crawlItems, url)
 	}
 
 	lenItems := len(crawlItems)
