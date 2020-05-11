@@ -17,11 +17,12 @@ import (
 	"github.com/Loyalsoldier/cn-blocked-domain/errorer"
 	"github.com/Loyalsoldier/cn-blocked-domain/parser"
 	"github.com/Loyalsoldier/cn-blocked-domain/utils"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/matryer/try"
 )
 
 // LIMIT sets the capacity of channel to contain results
-const LIMIT = 100 * 32
+const LIMIT = 100 * 16
 
 // Done implies whether the URL has been crawled or not
 type Done bool
@@ -34,59 +35,22 @@ type GreatFireURL struct {
 	MaxPage   int
 }
 
-// AlexaTop1000Type defines the structure of AlexaTop1000 type of URLs and list
-type AlexaTop1000Type struct {
+// CrawlType defines the structure of AlexaTop1000 type of URLs and list
+type CrawlType struct {
 	GreatFireURL *GreatFireURL
 	URLList      []string
 	mux          sync.RWMutex
 }
 
-// NewURLList returns the URLs of type AlexaTop1000 to be crawled
-func (a *AlexaTop1000Type) NewURLList() {
-	a.mux.Lock()
-	a.URLList = make([]string, 0)
-	for i := 0; i < a.GreatFireURL.MaxPage; i++ {
-		fullURL := a.GreatFireURL.BaseURL + a.GreatFireURL.MiddleURL + a.GreatFireURL.SuffixURL + strconv.Itoa(i)
-		a.URLList = append(a.URLList, fullURL)
+// NewURLList returns the URL list to be crawled
+func (c *CrawlType) NewURLList() {
+	c.mux.Lock()
+	c.URLList = make([]string, 0)
+	for i := 0; i < c.GreatFireURL.MaxPage; i++ {
+		fullURL := c.GreatFireURL.BaseURL + c.GreatFireURL.MiddleURL + c.GreatFireURL.SuffixURL + strconv.Itoa(i)
+		c.URLList = append(c.URLList, fullURL)
 	}
-	defer a.mux.Unlock()
-}
-
-// BlockedType defines the structure of Blocked type of URLs and list
-type BlockedType struct {
-	GreatFireURL *GreatFireURL
-	URLList      []string
-	mux          sync.RWMutex
-}
-
-// NewURLList returns the URLs of type Blocked to be crawled
-func (b *BlockedType) NewURLList() {
-	b.mux.Lock()
-	b.URLList = make([]string, 0)
-	for i := 0; i < b.GreatFireURL.MaxPage; i++ {
-		fullURL := b.GreatFireURL.BaseURL + b.GreatFireURL.MiddleURL + b.GreatFireURL.SuffixURL + strconv.Itoa(i)
-		b.URLList = append(b.URLList, fullURL)
-	}
-	defer b.mux.Unlock()
-}
-
-// DomainsType defines the structure of Domains type of URLs and list
-type DomainsType struct {
-	GreatFireURL *GreatFireURL
-	URLList      []string
-	StopAtPage   int
-	mux          sync.RWMutex
-}
-
-// NewURLList returns the URLs of type Domains to be crawled
-func (d *DomainsType) NewURLList() {
-	d.mux.Lock()
-	d.URLList = make([]string, 0)
-	for i := 0; i < d.GreatFireURL.MaxPage; i++ {
-		fullURL := d.GreatFireURL.BaseURL + d.GreatFireURL.MiddleURL + d.GreatFireURL.SuffixURL + strconv.Itoa(i)
-		d.URLList = append(d.URLList, fullURL)
-	}
-	defer d.mux.Unlock()
+	defer c.mux.Unlock()
 }
 
 // Results defines the structure of domain result map
@@ -105,6 +69,36 @@ func (r Results) SortAndUnique(reForIP string) []string {
 	}
 	sort.Strings(resultSlice)
 	return resultSlice
+}
+
+// GetMaxPage gets the max page of crawl type
+func GetMaxPage(initURLSlice map[*CrawlType]string, initElem, initHrefElem string) {
+	for crawlType, initURL := range initURLSlice {
+		ungzipData, err := crawler.Crawl(initURL, "https://zh.greatfire.org")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer ungzipData.Close()
+
+		// Load the HTML document
+		doc, err := goquery.NewDocumentFromReader(ungzipData)
+
+		// Find items
+		doc.Find(initElem).Each(func(i int, s *goquery.Selection) {
+			// For each item found, get contents
+			lastPageHref, exists := s.Find(initHrefElem).Attr("href")
+			if exists {
+				matchList := strings.Split(lastPageHref, "?page=")
+				if len(matchList) > 0 {
+					maxPage := matchList[1]
+					crawlType.GreatFireURL.MaxPage, _ = strconv.Atoi(maxPage)
+					log.Printf("%s has %s pages\n", initURL, maxPage)
+				}
+			} else {
+				log.Printf("Failed to get the max page of %s\n", initURL)
+			}
+		})
+	}
 }
 
 // ControlFlow controls the crawl process
@@ -193,7 +187,7 @@ func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re,
 				matchList := reg.FindStringSubmatch(url)
 
 				if len(matchList) > 0 {
-					domain = matchList[0]
+					domain = matchList[len(matchList)-2]
 					// Write filtered result to console
 					fmt.Printf("%s | %d\n", domain, percent)
 					// Write filtered result to Results type variable resultMap
@@ -214,20 +208,18 @@ func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re,
 
 func main() {
 	const (
-		elem              = "table.gf-header tbody tr"
-		uElem             = "td.first a"
-		bElem             = "td.blocked"
-		rElem             = "td.restricted"
-		re                = `([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)`
-		reForIP           = `(([0-9]{1,3}\.){3}[0-9]{1,3})`
-		rawFile           = "raw.txt"
-		filteredFile      = "temp-domains.txt"
-		alexaMaxPage      = 7
-		blockedMaxPage    = 935
-		domainsMaxPage    = 1293
-		domainsStopAtPage = 123
-		percentStd        = 50 // set the min percent to filter domains
-		retryTimes        = 3  // set crawler max retry times
+		initElem     = "ul.pager"
+		initHrefElem = ".pager-last.last a"
+		elem         = "table.gf-header tbody tr"
+		uElem        = "td.first a"
+		bElem        = "td.blocked"
+		rElem        = "td.restricted"
+		re           = `^\/(https?\/)?([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)$`
+		reForIP      = `(([0-9]{1,3}\.){3}[0-9]{1,3})`
+		rawFile      = "raw.txt"
+		filteredFile = "temp-domains.txt"
+		percentStd   = 50 // set the min percent to filter domains
+		retryTimes   = 3  // set crawler max retry times
 	)
 
 	// Set Go processors no less than 16
@@ -237,41 +229,43 @@ func main() {
 	}
 	runtime.GOMAXPROCS(numCPUs)
 
-	alexaTop1000 := &AlexaTop1000Type{
+	alexaTop1000 := &CrawlType{
 		GreatFireURL: &GreatFireURL{
 			BaseURL:   "https://zh.greatfire.org/search/",
 			MiddleURL: "alexa-top-1000-domains",
-			SuffixURL: "?page=",
-			MaxPage:   alexaMaxPage}}
+			SuffixURL: "?page="}}
 
-	blocked := &BlockedType{
+	blocked := &CrawlType{
 		GreatFireURL: &GreatFireURL{
 			BaseURL:   "https://zh.greatfire.org/search/",
 			MiddleURL: "blocked",
-			SuffixURL: "?page=",
-			MaxPage:   blockedMaxPage}}
+			SuffixURL: "?page="}}
 
-	domains := &DomainsType{
-		StopAtPage: domainsStopAtPage,
+	domains := &CrawlType{
 		GreatFireURL: &GreatFireURL{
 			BaseURL:   "https://zh.greatfire.org/search/",
 			MiddleURL: "domains",
-			SuffixURL: "?page=",
-			MaxPage:   domainsMaxPage}}
+			SuffixURL: "?page="}}
 
+	initURLSlice := make(map[*CrawlType]string)
+	initURLSlice[alexaTop1000] = "https://zh.greatfire.org/search/alexa-top-1000-domains?page=0"
+	initURLSlice[blocked] = "https://zh.greatfire.org/search/blocked?page=0"
+	initURLSlice[domains] = "https://zh.greatfire.org/search/domains?page=0"
+
+	// Get CrawlType max page
+	GetMaxPage(initURLSlice, initElem, initHrefElem)
+
+	// Generates each type's URLList
 	alexaTop1000.NewURLList()
 	blocked.NewURLList()
 	domains.NewURLList()
 
+	// Generate items to be crawled
 	crawlItems := make([]string, 0)
-	for _, url := range alexaTop1000.URLList {
-		crawlItems = append(crawlItems, url)
-	}
-	for _, url := range blocked.URLList {
-		crawlItems = append(crawlItems, url)
-	}
-	for _, url := range domains.URLList {
-		crawlItems = append(crawlItems, url)
+	for crawlType := range initURLSlice {
+		for _, url := range crawlType.URLList {
+			crawlItems = append(crawlItems, url)
+		}
 	}
 
 	lenItems := len(crawlItems)
