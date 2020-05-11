@@ -1,7 +1,10 @@
 name: Get blocked domains from Greatfire Analyzer 
 on:
   schedule:
-    - cron: "0 20 */30 * *"
+    - cron: "0 20 */15 * *"
+  push:
+    branches:
+      - master
 jobs:
   build:
     name: Build
