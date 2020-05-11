@@ -20,7 +20,7 @@ import (
 )
 
 // LIMIT sets the capacity of channel to contain results
-const LIMIT = 100 * 16
+const LIMIT = 100 * 32
 
 // Done implies whether the URL has been crawled or not
 type Done bool
@@ -225,10 +225,10 @@ func main() {
 		retryTimes        = 3  // set crawler max retry times
 	)
 
-	// Set Go processors no less than 8
+	// Set Go processors no less than 16
 	numCPUs := runtime.NumCPU()
-	if numCPUs < 8 {
-		numCPUs = 8
+	if numCPUs < 16 {
+		numCPUs = 16
 	}
 	runtime.GOMAXPROCS(numCPUs)
 
