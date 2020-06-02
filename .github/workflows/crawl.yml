@@ -1,10 +1,13 @@
 name: Get blocked domains from Greatfire Analyzer 
 on:
   schedule:
-    - cron: "0 20 */15 * *"
+    - cron: "0 20 */16 * *"
   push:
     branches:
       - master
+    paths-ignore:
+      - ".github/**"
+      - "**/README.md"
 jobs:
   build:
     name: Build
