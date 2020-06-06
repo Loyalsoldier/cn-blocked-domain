@@ -21,9 +21,6 @@ import (
 	"github.com/matryer/try"
 )
 
-// LIMIT sets the capacity of channel to contain results
-const LIMIT = 100 * 16
-
 // Done implies whether the URL has been crawled or not
 type Done bool
 
@@ -102,25 +99,26 @@ func GetMaxPage(initURLSlice map[*CrawlType]string, initElem, initHrefElem strin
 }
 
 // ControlFlow controls the crawl process
-func ControlFlow(crawlItems []string, outChan chan map[string]int, elem, uElem, bElem, rElem string, lenItems, retryTimes, numCPUs int) {
-	maxGoRoutinesChan := make(chan int, numCPUs)
-	doneChan := make(chan Done, lenItems)
+func ControlFlow(crawlItems []string, outChan chan map[string]int, elem, uElem, bElem, rElem string, retryTimes, numCPUs int) {
+	var wg sync.WaitGroup
+	maxGoRoutinesChan := make(chan struct{}, numCPUs)
 
 	for _, url := range crawlItems {
-		maxGoRoutinesChan <- 1
-		go CrawlAndProcessPage(url, outChan, doneChan, maxGoRoutinesChan, elem, uElem, bElem, rElem, retryTimes)
+		// Decrement the remaining space for max GoRoutines parallelism
+		maxGoRoutinesChan <- struct{}{}
+		// Increment the WaitGroup counter
+		wg.Add(1)
+		go CrawlAndProcessPage(url, outChan, &wg, maxGoRoutinesChan, elem, uElem, bElem, rElem, retryTimes)
 	}
 
-	// Wait for all goroutines to be completed
-	for i := 0; i < lenItems; i++ {
-		<-doneChan
-	}
-	close(doneChan)
+	// Wait for all goroutines to complete
+	wg.Wait()
+
 	close(outChan)
 }
 
 // CrawlAndProcessPage crawls a URL page and processes it
-func CrawlAndProcessPage(url string, outChan chan map[string]int, doneChan chan Done, maxGoRoutinesChan chan int, elem, uElem, bElem, rElem string, retryTimes int) {
+func CrawlAndProcessPage(url string, outChan chan map[string]int, wg *sync.WaitGroup, maxGoRoutinesChan chan struct{}, elem, uElem, bElem, rElem string, retryTimes int) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("Goroutine panic: fetching %v : %v\n", url, err)
@@ -150,8 +148,8 @@ func CrawlAndProcessPage(url string, outChan chan map[string]int, doneChan chan 
 
 	parser.HTMLParser(outChan, ungzipData, elem, uElem, bElem, rElem)
 
-	// Indicate that this goroutine has completed
-	doneChan <- true
+	// Decrement the counter when the goroutine completes
+	defer wg.Done()
 	// Indicate that there is one free space in goroutine list
 	<-maxGoRoutinesChan
 }
@@ -218,8 +216,9 @@ func main() {
 		reForIP      = `(([0-9]{1,3}\.){3}[0-9]{1,3})`
 		rawFile      = "raw.txt"
 		filteredFile = "temp-domains.txt"
-		percentStd   = 50 // set the min percent to filter domains
-		retryTimes   = 3  // set crawler max retry times
+		percentStd   = 50       // set the min percent to filter domains
+		retryTimes   = 3        // set crawler max retry times
+		MaxCap       = 100 * 16 // set the capacity of channel to contain results
 	)
 
 	// Set Go processors no less than 16
@@ -268,9 +267,8 @@ func main() {
 		}
 	}
 
-	lenItems := len(crawlItems)
-	resultChan := make(chan map[string]int, LIMIT)
+	resultChan := make(chan map[string]int, MaxCap)
 
-	go ControlFlow(crawlItems, resultChan, elem, uElem, bElem, rElem, lenItems, retryTimes, numCPUs)
+	go ControlFlow(crawlItems, resultChan, elem, uElem, bElem, rElem, retryTimes, numCPUs)
 	ValidateAndWrite(resultChan, filteredFile, rawFile, re, reForIP, percentStd)
 }
