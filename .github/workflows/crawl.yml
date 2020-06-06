@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup Go 1.14
-        uses: actions/setup-go@v1
+        uses: actions/setup-go@v2
         with:
           go-version: 1.14
 
@@ -45,10 +45,9 @@ jobs:
           sort ./deleted-domains-unsort.txt > ./deleted-domains-sort.txt
           diff ./deleted-domains-sort.txt ./temp-domains.txt | awk '/^>/{print $2}' > ./domains.txt
 
-      - name: Make dir and move file
+      - name: Move file
         run: |
-          mkdir ./publish
-          cp ./domains.txt ./publish/
+          install -Dp domains.txt ./publish/domains.txt
 
       - name: Release and upload assets
         uses: softprops/action-gh-release@v1
