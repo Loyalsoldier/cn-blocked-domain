@@ -221,7 +221,7 @@ func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re,
 }
 
 func main() {
-	// Set Go processors no less than 16
+	// Set Go processors no less than 8
 	numCPUs := runtime.NumCPU()
 	if numCPUs < 8 {
 		numCPUs = 8
