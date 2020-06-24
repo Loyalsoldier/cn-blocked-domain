@@ -21,6 +21,22 @@ import (
 	"github.com/matryer/try"
 )
 
+const (
+	initElem     = "ul.pager"
+	initHrefElem = ".pager-last.last a"
+	elem         = "table.gf-header tbody tr"
+	uElem        = "td.first a"
+	bElem        = "td.blocked"
+	rElem        = "td.restricted"
+	re           = `^\/(https?\/)?([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)$`
+	reForIP      = `(([0-9]{1,3}\.){3}[0-9]{1,3})`
+	rawFile      = "raw.txt"
+	filteredFile = "temp-domains.txt"
+	percentStd   = 50       // set the min percent to filter domains
+	retryTimes   = 3        // set crawler max retry times
+	maxCap       = 100 * 16 // set the capacity of channel to contain results
+)
+
 // Done implies whether the URL has been crawled or not
 type Done bool
 
@@ -205,22 +221,6 @@ func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re,
 }
 
 func main() {
-	const (
-		initElem     = "ul.pager"
-		initHrefElem = ".pager-last.last a"
-		elem         = "table.gf-header tbody tr"
-		uElem        = "td.first a"
-		bElem        = "td.blocked"
-		rElem        = "td.restricted"
-		re           = `^\/(https?\/)?([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)$`
-		reForIP      = `(([0-9]{1,3}\.){3}[0-9]{1,3})`
-		rawFile      = "raw.txt"
-		filteredFile = "temp-domains.txt"
-		percentStd   = 50       // set the min percent to filter domains
-		retryTimes   = 3        // set crawler max retry times
-		MaxCap       = 100 * 16 // set the capacity of channel to contain results
-	)
-
 	// Set Go processors no less than 16
 	numCPUs := runtime.NumCPU()
 	if numCPUs < 8 {
@@ -267,7 +267,7 @@ func main() {
 		}
 	}
 
-	resultChan := make(chan map[string]int, MaxCap)
+	resultChan := make(chan map[string]int, maxCap)
 
 	go ControlFlow(crawlItems, resultChan, elem, uElem, bElem, rElem, retryTimes, numCPUs)
 	ValidateAndWrite(resultChan, filteredFile, rawFile, re, reForIP, percentStd)
