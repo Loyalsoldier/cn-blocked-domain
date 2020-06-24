@@ -5,7 +5,7 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/Loyalsoldier/cn-blocked-domain/errorer"
+	"github.com/Loyalsoldier/cn-blocked-domain/utils"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -19,7 +19,7 @@ func HTMLParser(resultChan chan map[string]int, data *gzip.Reader, elem, uElem, 
 
 	// Load the HTML document
 	doc, err := goquery.NewDocumentFromReader(data)
-	errorer.CheckError(err)
+	utils.CheckError(err)
 
 	// Find items
 	doc.Find(elem).Each(func(i int, s *goquery.Selection) {

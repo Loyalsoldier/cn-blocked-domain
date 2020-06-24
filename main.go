@@ -14,7 +14,6 @@ import (
 	"sync"
 
 	"github.com/Loyalsoldier/cn-blocked-domain/crawler"
-	"github.com/Loyalsoldier/cn-blocked-domain/errorer"
 	"github.com/Loyalsoldier/cn-blocked-domain/parser"
 	"github.com/Loyalsoldier/cn-blocked-domain/utils"
 	"github.com/PuerkitoBio/goquery"
@@ -156,10 +155,10 @@ func CrawlAndProcessPage(url string, outChan chan map[string]int, wg *sync.WaitG
 		log.Println(utils.Warning(attempt), "time, crawling URL:", utils.Info(url))
 
 		ungzipData, err = crawler.Crawl(url, "https://zh.greatfire.org")
-		errorer.CheckError(err)
+		utils.CheckError(err)
 		return
 	})
-	errorer.CheckError(err)
+	utils.CheckError(err)
 	defer ungzipData.Close()
 
 	parser.HTMLParser(outChan, ungzipData, elem, uElem, bElem, rElem)
@@ -179,11 +178,11 @@ func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re,
 	}()
 
 	f, err := os.OpenFile(rawFile, os.O_WRONLY|os.O_CREATE, 0644)
-	errorer.CheckError(err)
+	utils.CheckError(err)
 	defer f.Close()
 
 	g, err := os.OpenFile(filteredFile, os.O_WRONLY|os.O_CREATE, 0644)
-	errorer.CheckError(err)
+	utils.CheckError(err)
 	defer g.Close()
 
 	var resultMap Results = make(map[string]struct{})

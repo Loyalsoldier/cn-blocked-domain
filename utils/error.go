@@ -1,4 +1,4 @@
-package errorer
+package utils
 
 // CheckError panics runtime error
 func CheckError(err error) {
