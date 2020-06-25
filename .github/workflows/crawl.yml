@@ -47,6 +47,7 @@ jobs:
 
       - name: Move file to publish directory
         run: |
+          mkdir -p ./publish
           install -p domains.txt raw.txt ./publish/
 
       - name: Release and upload assets
