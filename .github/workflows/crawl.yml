@@ -37,14 +37,6 @@ jobs:
           go get -u -v github.com/${{ github.repository }}
           cn-blocked-domain
 
-      - name: Remove redundant domains
-        run: |
-          chmod +x findRedundantDomain.py
-          ./findRedundantDomain.py ./temp-domains.txt ./deleted-domains-unsort.txt
-          [ ! -f "deleted-domains-unsort.txt" ] && touch deleted-domains-unsort.txt
-          sort ./deleted-domains-unsort.txt > ./deleted-domains-sort.txt
-          diff ./deleted-domains-sort.txt ./temp-domains.txt | awk '/^>/{print $2}' > ./domains.txt
-
       - name: Move file to publish directory
         run: |
           mkdir -p ./publish

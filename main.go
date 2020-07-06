@@ -30,7 +30,7 @@ const (
 	re           = `^\/(https?\/)?([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)$`
 	reForIP      = `(([0-9]{1,3}\.){3}[0-9]{1,3})`
 	rawFile      = "raw.txt"
-	filteredFile = "temp-domains.txt"
+	filteredFile = "domains.txt"
 	percentStd   = 50       // set the min percent to filter domains
 	retryTimes   = 3        // set crawler max retry times
 	maxCap       = 100 * 16 // set the capacity of channel to contain results
@@ -79,6 +79,7 @@ func (r Results) SortAndUnique(reForIP string) []string {
 		}
 		resultSlice = append(resultSlice, domainKey)
 	}
+	resultSlice = buildTreeAndUnique(splitAndSortByLabelsLength(resultSlice))
 	sort.Strings(resultSlice)
 	return resultSlice
 }
