@@ -26,7 +26,6 @@ const (
 	elem         = "table.gf-header tbody tr"
 	uElem        = "td.first a"
 	bElem        = "td.blocked"
-	rElem        = "td.restricted"
 	re           = `^\/(https?\/)?([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)$`
 	reForIP      = `(([0-9]{1,3}\.){3}[0-9]{1,3})`
 	rawFile      = "raw.txt"
@@ -115,7 +114,7 @@ func GetMaxPage(initURLSlice map[*CrawlType]string, initElem, initHrefElem strin
 }
 
 // ControlFlow controls the crawl process
-func ControlFlow(crawlItems []string, outChan chan map[string]int, elem, uElem, bElem, rElem string, retryTimes, numCPUs int) {
+func ControlFlow(crawlItems []string, outChan chan map[string]int, elem, uElem, bElem string, retryTimes, numCPUs int) {
 	var wg sync.WaitGroup
 	maxGoRoutinesChan := make(chan struct{}, numCPUs)
 
@@ -124,7 +123,7 @@ func ControlFlow(crawlItems []string, outChan chan map[string]int, elem, uElem, 
 		maxGoRoutinesChan <- struct{}{}
 		// Increment the WaitGroup counter
 		wg.Add(1)
-		go CrawlAndProcessPage(url, outChan, &wg, maxGoRoutinesChan, elem, uElem, bElem, rElem, retryTimes)
+		go CrawlAndProcessPage(url, outChan, &wg, maxGoRoutinesChan, elem, uElem, bElem, retryTimes)
 	}
 
 	// Wait for all goroutines to complete
@@ -134,7 +133,7 @@ func ControlFlow(crawlItems []string, outChan chan map[string]int, elem, uElem, 
 }
 
 // CrawlAndProcessPage crawls a URL page and processes it
-func CrawlAndProcessPage(url string, outChan chan map[string]int, wg *sync.WaitGroup, maxGoRoutinesChan chan struct{}, elem, uElem, bElem, rElem string, retryTimes int) {
+func CrawlAndProcessPage(url string, outChan chan map[string]int, wg *sync.WaitGroup, maxGoRoutinesChan chan struct{}, elem, uElem, bElem string, retryTimes int) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("Goroutine panic: fetching %v : %v\n", url, err)
@@ -162,7 +161,7 @@ func CrawlAndProcessPage(url string, outChan chan map[string]int, wg *sync.WaitG
 	utils.CheckError(err)
 	defer ungzipData.Close()
 
-	parser.HTMLParser(outChan, ungzipData, elem, uElem, bElem, rElem)
+	parser.HTMLParser(outChan, ungzipData, elem, uElem, bElem)
 
 	// Decrement the counter when the goroutine completes
 	defer wg.Done()
@@ -269,6 +268,6 @@ func main() {
 
 	resultChan := make(chan map[string]int, maxCap)
 
-	go ControlFlow(crawlItems, resultChan, elem, uElem, bElem, rElem, retryTimes, numCPUs)
+	go ControlFlow(crawlItems, resultChan, elem, uElem, bElem, retryTimes, numCPUs)
 	ValidateAndWrite(resultChan, filteredFile, rawFile, re, reForIP, percentStd)
 }
