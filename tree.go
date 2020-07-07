@@ -8,7 +8,7 @@ import (
 	"github.com/Loyalsoldier/cn-blocked-domain/utils"
 )
 
-const leaf = true
+const LEAF = true
 
 type domainLabel string
 
@@ -42,17 +42,12 @@ func splitAndSortByLabelsLength(domainSlice []string) [][]string {
 }
 
 func buildTreeAndUnique(sortedDomainList [][]string) []string {
-	// Copy sortedDomainList for filtering purpose later
-	copiedDomainList := make([][]string, 0, len(sortedDomainList))
-	for _, labels := range sortedDomainList {
-		copiedDomainList = append(copiedDomainList, labels)
-	}
-	// Mark down the redundant domain index number in sortedDomainList
+	// Mark the redundant domain index number in sortedDomainList for filtering purposes later
 	redundantDomainID := make(map[int]bool)
 
 	tree := newList()
 	for idx, labels := range sortedDomainList {
-		copiedLabels := make([]string, 0, len(labels))
+		copiedLabels := make([]string, len(labels))
 		copy(copiedLabels, labels)
 		utils.ReverseSlice(copiedLabels)
 		normalDomain := strings.Join(copiedLabels, ".")
@@ -65,9 +60,10 @@ func buildTreeAndUnique(sortedDomainList [][]string) []string {
 
 			val, ok := node.found(label)
 			if ok {
-				if val == leaf {
+				if val == LEAF {
 					redundantDomainID[idx] = true
-					log.Println("Redundant found: ", utils.Warning(normalDomain), " at ", utils.Fatal(strings.Join(labels, ".")))
+					utils.ReverseSlice(labels)
+					log.Println("Found redundant domain: ", utils.Info(normalDomain), "@", utils.Warning(strings.Join(labels, ".")))
 					break
 				} else {
 					node = (*node)[label].(*domainList)
@@ -75,7 +71,7 @@ func buildTreeAndUnique(sortedDomainList [][]string) []string {
 				}
 			} else {
 				if len(labels) == 0 {
-					node.set(label, leaf)
+					node.set(label, LEAF)
 				} else {
 					temp := newList()
 					node.set(label, temp)
@@ -87,8 +83,8 @@ func buildTreeAndUnique(sortedDomainList [][]string) []string {
 	}
 
 	// Remove redundant domains and build unfiltered domains slice
-	domainListSlice := make([]string, 0, len(copiedDomainList))
-	for idx, labels := range copiedDomainList {
+	domainListSlice := make([]string, 0, len(sortedDomainList))
+	for idx, labels := range sortedDomainList {
 		if !redundantDomainID[idx] {
 			utils.ReverseSlice(labels)
 			domain := strings.Join(labels, ".")
