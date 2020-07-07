@@ -3,11 +3,8 @@ on:
   schedule:
     - cron: "0 20 */16 * *"
   push:
-    branches:
-      - master
-    paths-ignore:
-      - ".github/**"
-      - "**/README.md"
+    tags:
+      - "v*"
 jobs:
   build:
     name: Build
