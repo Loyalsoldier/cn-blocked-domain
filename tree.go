@@ -42,7 +42,7 @@ func splitAndSortByLabelsLength(domainSlice []string) [][]string {
 }
 
 func buildTreeAndUnique(sortedDomainList [][]string) []string {
-	// Mark the redundant domain index number in sortedDomainList for filtering purposes later
+	// Mark indexes of redundant domains in sortedDomainList for filtering purpose later
 	redundantDomainID := make(map[int]bool)
 
 	tree := newList()
@@ -82,7 +82,7 @@ func buildTreeAndUnique(sortedDomainList [][]string) []string {
 		tree = iterableNode
 	}
 
-	// Remove redundant domains and build unfiltered domains slice
+	// Remove redundant domains and build slice of remaining domains
 	domainListSlice := make([]string, 0, len(sortedDomainList))
 	for idx, labels := range sortedDomainList {
 		if !redundantDomainID[idx] {
