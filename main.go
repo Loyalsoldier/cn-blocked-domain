@@ -220,12 +220,23 @@ func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re,
 }
 
 func main() {
-	// Set Go processors no less than 8
+	// Set precise number of Go processors
 	numCPUs := runtime.NumCPU()
-	if numCPUs < 8 {
-		numCPUs = 8
+	orginalCPUs := numCPUs
+	switch {
+	case numCPUs <= 1:
+		numCPUs = 2
+	case numCPUs <= 2:
+		numCPUs = 10
+	case numCPUs <= 4:
+		numCPUs *= 3
+	default:
+		numCPUs *= 2
 	}
 	runtime.GOMAXPROCS(numCPUs)
+
+	fmt.Println("CPU cores: ", utils.Info(orginalCPUs))
+	fmt.Println("Go Processors: ", utils.Info(numCPUs))
 
 	alexaTop1000 := &CrawlType{
 		GreatFireURL: &GreatFireURL{
