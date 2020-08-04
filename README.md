@@ -23,3 +23,5 @@
 ## 使用本项目的项目
 
 - [@Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat)
+- [@Loyalsoldier/clash-rules](https://github.com/Loyalsoldier/clash-rules)
+- [@Loyalsoldier/surge-rules](https://github.com/Loyalsoldier/surge-rules)
