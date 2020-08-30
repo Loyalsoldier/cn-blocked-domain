@@ -1,4 +1,4 @@
-name: Get blocked domains from Greatfire Analyzer
+name: Crawl blocked domains from Greatfire Analyzer
 on:
   schedule:
     - cron: "0 20 */16 * *"
@@ -6,14 +6,13 @@ on:
     tags:
       - "v*"
 jobs:
-  build:
-    name: Build
+  crawl:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Go 1.x
+      - name: Setup Go 1.x.y
         uses: actions/setup-go@v2
         with:
-          go-version: "^1.14"
+          go-version: "^1.14.7"
 
       - name: Set $GOPATH and more variables
         run: |
@@ -21,7 +20,7 @@ jobs:
           echo "::set-env name=TAG_NAME::$(date +%Y%m%d%H%M)"
           echo "::set-env name=GOPATH::$(dirname $GITHUB_WORKSPACE)"
           echo "::add-path::$(dirname $GITHUB_WORKSPACE)/bin"
-          go env -w GO111MODULE=auto
+          go env -w GO111MODULE=on
         shell: bash
 
       - name: Checkout the "master" branch
@@ -31,7 +30,7 @@ jobs:
 
       - name: Go get project code & run
         run: |
-          go get -u -v github.com/${{ github.repository }}
+          go get -v github.com/${{ github.repository }}
           cn-blocked-domain
 
       - name: Move file to publish directory
