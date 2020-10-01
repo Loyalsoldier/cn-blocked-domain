@@ -18,20 +18,16 @@ jobs:
         run: |
           echo "::set-env name=RELEASE_NAME::Released on $(date +%Y%m%d%H%M)"
           echo "::set-env name=TAG_NAME::$(date +%Y%m%d%H%M)"
-          echo "::set-env name=GOPATH::$(dirname $GITHUB_WORKSPACE)"
-          echo "::add-path::$(dirname $GITHUB_WORKSPACE)/bin"
           go env -w GO111MODULE=on
         shell: bash
 
-      - name: Checkout the "master" branch
+      - name: Checkout codebase
         uses: actions/checkout@v2.3.3
-        with:
-          ref: master
 
-      - name: Go get project code & run
+      - name: Get project dependencies & run
         run: |
-          go get -v github.com/${{ github.repository }}
-          cn-blocked-domain
+          go mod download
+          go run *.go
 
       - name: Move file to publish directory
         run: |
