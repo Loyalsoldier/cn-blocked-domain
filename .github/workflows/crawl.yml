@@ -16,8 +16,8 @@ jobs:
 
       - name: Set $GOPATH and more variables
         run: |
-          echo "::set-env name=RELEASE_NAME::Released on $(date +%Y%m%d%H%M)"
-          echo "::set-env name=TAG_NAME::$(date +%Y%m%d%H%M)"
+          echo "RELEASE_NAME=Released on $(date +%Y%m%d%H%M)" >> $GITHUB_ENV
+          echo "TAG_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
           go env -w GO111MODULE=on
         shell: bash
 
