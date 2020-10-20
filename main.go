@@ -78,7 +78,6 @@ func (r Results) SortAndUnique(reForIP string) []string {
 	}
 
 	sort.Stable(resultSlice)
-	fmt.Println(resultSlice)
 	return buildTreeAndUnique(resultSlice)
 }
 
