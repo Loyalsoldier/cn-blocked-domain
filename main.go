@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -220,20 +219,7 @@ func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re,
 }
 
 func main() {
-	// Set precise number of Go processors
-	numCPUs := runtime.NumCPU()
-	orginalCPUs := numCPUs
-	switch {
-	case numCPUs <= 1:
-		numCPUs = 2
-	case numCPUs <= 2:
-		numCPUs *= 4
-	case numCPUs <= 4:
-		numCPUs *= 3
-	default:
-		numCPUs *= 2
-	}
-	runtime.GOMAXPROCS(numCPUs)
+	orginalCPUs, numCPUs := utils.SetGOMAXPROCS()
 
 	fmt.Println("CPU cores: ", utils.Info(orginalCPUs))
 	fmt.Println("Go Processors: ", utils.Info(numCPUs))
