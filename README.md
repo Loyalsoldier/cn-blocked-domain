@@ -13,12 +13,9 @@
 如果希望自行生成域名列表，按照下面步骤操作：
 
 1. 安装 `git` 和 v1.14.0 或更新版本的 `Golang`
-2. 下载项目代码，有两种方式：
-   1. Git clone：`git clone https://github.com/Loyalsoldier/cn-blocked-domain.git`
-   2. 用 Go 下载并安装代码：`go get -v github.com/Loyalsoldier/cn-blocked-domain`
-3. 运行代码（分别对应第 2 步中的两种项目代码下载方式）：
-   1. `go run *.go`
-   2. `${GOPATH:-$(go env GOPATH)}/bin/cn-blocked-domain`
+2. 克隆项目代码：`git clone https://github.com/Loyalsoldier/cn-blocked-domain.git`
+3. 进入项目根目录：`cd cn-blocked-domain`
+4. 运行：`go run ./`
 
 ## 使用本项目的项目
 
