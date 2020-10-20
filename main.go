@@ -69,18 +69,18 @@ type Results map[string]struct{}
 
 // SortAndUnique filters the Results slice
 func (r Results) SortAndUnique(reForIP string) []string {
-	resultSlice := make([]string, 0, len(r))
+	resultSlice := make(sortableSlice, 0, len(r))
 	reg := regexp.MustCompile(reForIP)
 	for domainKey := range r {
-		matchList := reg.FindStringSubmatch(domainKey)
-		if len(matchList) > 0 {
+		if len(reg.FindStringSubmatch(domainKey)) > 0 {
 			continue
 		}
 		resultSlice = append(resultSlice, domainKey)
 	}
-	resultSlice = buildTreeAndUnique(splitAndSortByLabelsLength(resultSlice))
-	sort.Strings(resultSlice)
-	return resultSlice
+
+	sort.Stable(resultSlice)
+	fmt.Println(resultSlice)
+	return buildTreeAndUnique(resultSlice)
 }
 
 // GetMaxPage gets the max page of crawl type

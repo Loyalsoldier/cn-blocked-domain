@@ -1,95 +1,67 @@
 package main
 
 import (
-	"log"
-	"sort"
-	"strings"
-
-	"github.com/Loyalsoldier/cn-blocked-domain/utils"
+	"errors"
 )
 
-const LEAF = true
+type node struct {
+	leaf     bool
+	children map[string]*node
+}
 
-type domainLabel string
+func newNode() *node {
+	return &node{
+		leaf:     false,
+		children: make(map[string]*node),
+	}
+}
 
-type domainList map[domainLabel]interface{}
+func (n *node) getChild(s string) *node {
+	return n.children[s]
+}
+
+func (n *node) hasChild(s string) bool {
+	return n.getChild(s) != nil
+}
+
+func (n *node) addChild(s string, child *node) {
+	n.children[s] = child
+}
+
+func (n *node) isLeaf() bool {
+	return n.leaf
+}
+
+type domainList struct {
+	root *node
+}
 
 func newList() *domainList {
-	domainList := make(domainList)
-	return &domainList
-}
-
-func (l *domainList) set(label domainLabel, value interface{}) {
-	(*l)[label] = value
-}
-
-func (l *domainList) found(label domainLabel) (interface{}, bool) {
-	if (*l)[label] != nil {
-		return (*l)[label], true
+	return &domainList{
+		root: newNode(),
 	}
-	return nil, false
 }
 
-func splitAndSortByLabelsLength(domainSlice []string) [][]string {
-	sortedDomainList := make([][]string, 0, len(domainSlice))
-	for _, domain := range domainSlice {
-		labels := strings.Split(domain, ".")
-		utils.ReverseSlice(labels)
-		sortedDomainList = append(sortedDomainList, labels)
+func (t *domainList) Insert(parts []string) (int, bool, error) {
+	if len(parts) == 0 {
+		return 0, false, errors.New("empty domain")
 	}
-	sort.SliceStable(sortedDomainList, func(i, j int) bool { return len(sortedDomainList[i]) < len(sortedDomainList[j]) })
-	return sortedDomainList
-}
 
-func buildTreeAndUnique(sortedDomainList [][]string) []string {
-	// Mark indexes of redundant domains in sortedDomainList for filtering purpose later
-	redundantDomainID := make(map[int]bool)
+	node := t.root
+	for i := len(parts) - 1; i >= 0; i-- {
+		part := parts[i]
 
-	tree := newList()
-	for idx, labels := range sortedDomainList {
-		copiedLabels := make([]string, len(labels))
-		copy(copiedLabels, labels)
-		utils.ReverseSlice(copiedLabels)
-		normalDomain := strings.Join(copiedLabels, ".")
-
-		node := tree
-		iterableNode := node
-		for len(labels) > 0 {
-			label := domainLabel(labels[0])
-			labels = labels[1:]
-
-			val, ok := node.found(label)
-			if ok {
-				if val == LEAF {
-					redundantDomainID[idx] = true
-					utils.ReverseSlice(labels)
-					log.Println("Found redundant domain: ", utils.Info(normalDomain), "@", utils.Warning(strings.Join(labels, ".")))
-					break
-				} else {
-					node = (*node)[label].(*domainList)
-					continue
-				}
-			} else {
-				if len(labels) == 0 {
-					node.set(label, LEAF)
-				} else {
-					temp := newList()
-					node.set(label, temp)
-					node = temp
-				}
+		if node.isLeaf() {
+			return i, false, nil
+		}
+		if !node.hasChild(part) {
+			node.addChild(part, newNode())
+			if i == 0 {
+				node.getChild(part).leaf = true
+				return 0, true, nil
 			}
 		}
-		tree = iterableNode
+		node = node.getChild(part)
 	}
-
-	// Remove redundant domains and build slice of remaining domains
-	domainListSlice := make([]string, 0, len(sortedDomainList))
-	for idx, labels := range sortedDomainList {
-		if !redundantDomainID[idx] {
-			utils.ReverseSlice(labels)
-			domain := strings.Join(labels, ".")
-			domainListSlice = append(domainListSlice, domain)
-		}
-	}
-	return domainListSlice
+	return 0, false, nil
 }
