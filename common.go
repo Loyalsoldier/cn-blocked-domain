@@ -101,8 +101,9 @@ func CrawlAndProcessPage(url string, outChan chan map[string]int, wg *sync.WaitG
 
 		if attempt > 1 {
 			log.Println(utils.Fatal(attempt), "time, crawling URL:", utils.Info(url))
+		} else {
+			log.Println(utils.Warning(attempt), "time, crawling URL:", utils.Info(url))
 		}
-		log.Println(utils.Warning(attempt), "time, crawling URL:", utils.Info(url))
 
 		ungzipData, err = crawler.Crawl(url, "https://zh.greatfire.org")
 		utils.CheckError(err)
