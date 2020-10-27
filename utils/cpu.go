@@ -9,8 +9,6 @@ func SetGOMAXPROCS() (int, int) {
 	switch {
 	case numCPUs <= 1:
 		numCPUs = 2
-	case numCPUs <= 2:
-		numCPUs *= 4
 	case numCPUs <= 4:
 		numCPUs *= 3
 	default:
