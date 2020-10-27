@@ -1,10 +1,8 @@
 name: Crawl blocked domains from Greatfire Analyzer
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 20 */16 * *"
-  push:
-    tags:
-      - "v*"
 jobs:
   crawl:
     runs-on: ubuntu-latest
