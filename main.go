@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Loyalsoldier/cn-blocked-domain/utils"
@@ -59,7 +60,7 @@ type Results map[string]struct{}
 
 // SortAndUnique filters the Results slice
 func (r Results) SortAndUnique(reForIP string) []string {
-	resultSlice := make(sortableSlice, 0, len(r))
+	resultSlice := make([]string, 0, len(r))
 	reg := regexp.MustCompile(reForIP)
 	for domainKey := range r {
 		if len(reg.FindStringSubmatch(domainKey)) > 0 {
@@ -68,7 +69,9 @@ func (r Results) SortAndUnique(reForIP string) []string {
 		resultSlice = append(resultSlice, domainKey)
 	}
 
-	sort.Stable(resultSlice)
+	sort.SliceStable(resultSlice, func(i, j int) bool {
+		return len(strings.Split(resultSlice[i], ".")) < len(strings.Split(resultSlice[j], "."))
+	})
 	return buildTreeAndUnique(resultSlice)
 }
 

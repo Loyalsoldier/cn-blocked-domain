@@ -19,20 +19,6 @@ import (
 	"github.com/matryer/try"
 )
 
-type sortableSlice []string
-
-func (r sortableSlice) Len() int {
-	return len(r)
-}
-
-func (r sortableSlice) Less(i, j int) bool {
-	return len(strings.Split(r[i], ".")) < len(strings.Split(r[j], "."))
-}
-
-func (r sortableSlice) Swap(i, j int) {
-	r[i], r[j] = r[j], r[i]
-}
-
 // GetMaxPage gets the max page of crawl type
 func GetMaxPage(initURLSlice map[*CrawlType]string, initElem, initHrefElem string) {
 	for crawlType, initURL := range initURLSlice {
@@ -162,9 +148,7 @@ func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re,
 	}
 
 	resultSlice := resultMap.SortAndUnique(reForIP)
-	sort.Slice(resultSlice, func(i, j int) bool {
-		return resultSlice[i] < resultSlice[j]
-	})
+	sort.Strings(resultSlice)
 
 	for _, domain := range resultSlice {
 		// Write filtered result to temp-domains.txt file
