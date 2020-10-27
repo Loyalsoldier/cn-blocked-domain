@@ -150,12 +150,12 @@ func ValidateAndWrite(resultChan chan map[string]int, filteredFile, rawFile, re,
 	resultSlice := resultMap.SortAndUnique(reForIP)
 	sort.Strings(resultSlice)
 
+	x := bufio.NewWriter(g)
 	for _, domain := range resultSlice {
 		// Write filtered result to temp-domains.txt file
-		x := bufio.NewWriter(g)
 		x.WriteString(domain + "\n")
-		x.Flush()
 	}
+	x.Flush()
 }
 
 func buildTreeAndUnique(sortedDomainList []string) []string {
