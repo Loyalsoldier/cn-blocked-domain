@@ -1,6 +1,6 @@
 module github.com/Loyalsoldier/cn-blocked-domain
 
-go 1.14
+go 1.15
 
 require (
 	github.com/PuerkitoBio/goquery v1.6.0
