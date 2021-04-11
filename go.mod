@@ -4,6 +4,5 @@ go 1.16
 
 require (
 	github.com/PuerkitoBio/goquery v1.6.1
-	github.com/cheekybits/is v0.0.0-20150225183255-68e9c0620927 // indirect
-	github.com/matryer/try v0.0.0-20161228173917-9ac251b645a2
+	gopkg.in/yaml.v2 v2.4.0
 )
