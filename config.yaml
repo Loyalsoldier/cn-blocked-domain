@@ -1,0 +1,52 @@
+crawl:
+  url:
+    base_url: https://en.greatfire.org/search/
+    init_suffix_url: ?page=0
+    suffix_url: ?page=
+  types:
+    - name: alexaTop1000
+      type_url: alexa-top-1000-domains
+      referer: https://en.greatfire.org
+      is_crawl: true # true means to crawl this type. false means not to crawl it.
+      from: 0 # 0 means to start to crawl from page 0
+      to: -1 # -1 means to crawl all the pages of this type
+    - name: blocked
+      type_url: blocked
+      referer: https://en.greatfire.org
+      is_crawl: true
+      from: 0
+      to: -1
+    - name: domains
+      type_url: domains
+      referer: https://en.greatfire.org
+      is_crawl: false
+      from: 0
+      to: -1
+    - name: ipAddresses
+      type_url: ip-addresses
+      referer: https://en.greatfire.org
+      is_crawl: true
+      from: 0
+      to: -1
+  init_element:
+    container: ul.pager
+    content: .pager-last.last a
+    attr: href
+    splitter: ?page=
+  crawl_element:
+    container: table.gf-header tbody tr
+    content: td.first a
+    attr: href
+    condition: td.blocked
+filter:
+  regexp:
+    domain: ^\/(https?\/)?([a-zA-Z0-9][-_a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-_a-zA-Z0-9]{0,62})+)$
+    ip: ^(([0-9]{1,3}\.){3}[0-9]{1,3})
+  percent: 50 # set the minimal "blocked" percent to filter content
+customize:
+  cpu_cores: 0 # set the number of CPU cores to run the project. 0 means set by the program automatically
+  max_capacity: 50000 # set the capacity of the channel to deliver results temporarily
+  output_dir: ./publish
+  raw_filename: raw.txt
+  domain_filename: domains.txt
+  ip_filename: ip.txt
