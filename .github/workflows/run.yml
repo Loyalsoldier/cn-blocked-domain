@@ -48,3 +48,17 @@ jobs:
           git commit -m "${{ env.RELEASE_NAME }}"
           git remote add publish "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
           git push -f -u publish release
+
+      - name: Git push assets to "master" branch
+        run: |
+          rm -rf publish/
+          if grep -q '当前版本：' README.md; then
+            sed -i "/当前版本：/c 当前版本：${{ env.TAG_NAME }}" README.md
+          else
+            sed -i "/**domains.txt/i 当前版本：${{ env.TAG_NAME }}" README.md
+          fi
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "${{ env.RELEASE_NAME }}"
+          git push -f -u origin master
