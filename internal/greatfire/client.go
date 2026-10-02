@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -140,6 +141,7 @@ func (c *Client) fetchPage(ctx context.Context, offset int) (*Page, error) {
 	q.Set("limit", strconv.Itoa(PageSize))
 	q.Set("offset", strconv.Itoa(offset))
 	u.RawQuery = q.Encode()
+	log.Printf("Crawling: %s", u)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
