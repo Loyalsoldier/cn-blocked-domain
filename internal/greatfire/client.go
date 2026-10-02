@@ -40,6 +40,8 @@ type Client struct {
 	Delay time.Duration
 	// Retries is the number of extra attempts for a failed page.
 	Retries int
+	// MaxPages limits the number of pages fetched; 0 means all pages.
+	MaxPages int
 }
 
 // NewClient returns a Client with sensible defaults.
@@ -53,7 +55,8 @@ func NewClient(parallel int) *Client {
 	}
 }
 
-// FetchAll returns the "registrable" value of every blocked item across all pages.
+// FetchAll returns the "registrable" value of every blocked item across all
+// pages, or across the first c.MaxPages pages if c.MaxPages is positive.
 func (c *Client) FetchAll(ctx context.Context) ([]string, error) {
 	first, err := c.fetchPageWithRetry(ctx, 0)
 	if err != nil {
@@ -62,7 +65,11 @@ func (c *Client) FetchAll(ctx context.Context) ([]string, error) {
 	results := collect(first)
 
 	var offsets []int
-	for off := PageSize; off < first.Total; off += PageSize {
+	limit := first.Total
+	if c.MaxPages > 0 {
+		limit = min(limit, c.MaxPages*PageSize)
+	}
+	for off := PageSize; off < limit; off += PageSize {
 		offsets = append(offsets, off)
 	}
 

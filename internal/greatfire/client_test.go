@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -36,6 +37,32 @@ func TestFetchAll(t *testing.T) {
 	}
 	if len(got) != total || got[0] != "d0.com" || got[total-1] != "d449.com" {
 		t.Fatalf("unexpected result: len=%d", len(got))
+	}
+}
+
+func TestFetchAllMaxPages(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		off, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		p := Page{Total: 10000}
+		for i := off; i < off+PageSize; i++ {
+			p.Items = append(p.Items, Item{Registrable: "d" + strconv.Itoa(i) + ".com"})
+		}
+		json.NewEncoder(w).Encode(p)
+	}))
+	defer srv.Close()
+
+	c := NewClient(2)
+	c.BaseURL = srv.URL
+	c.Delay = time.Millisecond
+	c.MaxPages = 3
+	got, err := c.FetchAll(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3*PageSize || requests.Load() != 3 {
+		t.Fatalf("got %d entries in %d requests, want %d in 3", len(got), requests.Load(), 3*PageSize)
 	}
 }
 

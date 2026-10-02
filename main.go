@@ -26,17 +26,23 @@ const (
 
 func main() {
 	parallel := flag.Int("parallel", 10, "maximum number of pages to request at a time")
+	pages := flag.Int("pages", 0, "maximum number of pages to crawl (0 means all pages)")
 	outDir := flag.String("outdir", "publish", "directory to write output files to")
 	flag.Parse()
 
 	if *parallel < 1 {
 		log.Fatal("-parallel must be at least 1")
 	}
+	if *pages < 0 {
+		log.Fatal("-pages must not be negative")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	if err := run(ctx, greatfire.NewClient(*parallel), *outDir); err != nil {
+	client := greatfire.NewClient(*parallel)
+	client.MaxPages = *pages
+	if err := run(ctx, client, *outDir); err != nil {
 		log.Fatal(err)
 	}
 }
