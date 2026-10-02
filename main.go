@@ -1,48 +1,56 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
+	"io"
 	"log"
 	"os"
+	"os/signal"
+	"strings"
+
+	"github.com/Loyalsoldier/cn-blocked-domain/crawler"
 )
 
-var configFile = flag.String("c", "config.yaml", "Path to the configuration file, supports YAML and JSON.")
-
-func init() {
-	flag.Parse()
+func run(ctx context.Context, args []string, stderr io.Writer) error {
+	flags := flag.NewFlagSet("cn-blocked-domain", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	maxParallel := flags.Int("max-parallel", 10, "Maximum simultaneous requests (at least 1)")
+	outputDir := flags.String("output-dir", "publish", "Directory for generated lists")
+	if err := flags.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
+		return err
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("unexpected arguments: %s", strings.Join(flags.Args(), " "))
+	}
+	if strings.TrimSpace(*outputDir) == "" {
+		return fmt.Errorf("output directory must not be empty")
+	}
+	client, err := crawler.New(*maxParallel)
+	if err != nil {
+		return err
+	}
+	values, err := client.Fetch(ctx)
+	if err != nil {
+		return err
+	}
+	lists := aggregate(values)
+	if err := writeLists(*outputDir, lists); err != nil {
+		return err
+	}
+	fmt.Fprintf(stderr, "Wrote %d domains, %d removed domains and %d IP networks to %s; skipped %d invalid values\n",
+		len(lists.domains), len(lists.removed), len(lists.prefixes), *outputDir, lists.invalid)
+	return nil
 }
 
 func main() {
-	rawConfig := new(RawConfig)
-	config := new(Config)
-
-	if err := rawConfig.ParseRawConfig(*configFile); err != nil {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	if err := run(ctx, os.Args[1:], os.Stderr); err != nil {
 		log.Fatal(err)
-		os.Exit(1)
 	}
-
-	if err := config.GenerateConfig(rawConfig); err != nil {
-		log.Fatal(err)
-		os.Exit(2)
-	}
-
-	if err := config.SetNumCPU(); err != nil {
-		log.Fatal(err)
-		os.Exit(3)
-	}
-
-	for err := range config.CrawlMaxPage() {
-		log.Fatal(err)
-		os.Exit(4)
-	}
-
-	if err := config.GenerateCrawlList(); err != nil {
-		log.Fatal(err)
-		os.Exit(5)
-	}
-
-	maxCap := config.Customize.MaxCapacity
-	rawResultChan := make(chan map[*string]int, maxCap)
-	go config.Crawl(rawResultChan)
-	config.FilterAndWrite(rawResultChan)
 }
