@@ -8,7 +8,7 @@ import (
 func TestNormalize(t *testing.T) {
 	cases := map[string]string{
 		"WWW.Google.COM": "www.google.com", " example.org. ": "example.org", "com": "com", "a-b.io": "a-b.io",
-		"": "", "-a.com": "", "a..com": "", "1.2.3.4": "", "exa mple.com": "", "例子.com": "", "a_b.com": "",
+		"": "", "-a.com": "", "a..com": "", "1.2.3.4": "", "exa mple.com": "", "例子.com": "xn--fsqu00a.com", "Bücher.DE": "xn--bcher-kva.de", "a_b.com": "",
 	}
 	for in, want := range cases {
 		got, ok := Normalize(in)
@@ -23,7 +23,7 @@ func TestDeduplicate(t *testing.T) {
 	if want := []string{"a.b.org", "com", "example.net"}; !slices.Equal(kept, want) {
 		t.Errorf("kept = %v, want %v", kept, want)
 	}
-	if want := []string{"foo.com", "google.com", "mail.google.com", "www.google.com", "x.example.net"}; !slices.Equal(removed, want) {
+	if want := []string{"google.com", "mail.google.com", "www.google.com", "foo.com", "x.example.net"}; !slices.Equal(removed, want) {
 		t.Errorf("removed = %v, want %v", removed, want)
 	}
 }

@@ -2,13 +2,21 @@
 package domain
 
 import (
+	"slices"
 	"sort"
 	"strings"
+
+	"golang.org/x/net/idna"
 )
 
-// Normalize lower-cases and trims s, and reports whether it is a valid domain name.
+// Normalize trims s, converts internationalized names to lower-cased punycode
+// (e.g. "例子.com" to "xn--fsqu00a.com"), and reports whether it is a valid domain name.
 func Normalize(s string) (string, bool) {
 	d := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(s)), ".")
+	d, err := idna.ToASCII(d)
+	if err != nil {
+		return "", false
+	}
 	if d == "" || len(d) > 253 {
 		return "", false
 	}
@@ -49,7 +57,8 @@ func isNumeric(s string) bool {
 
 // Deduplicate removes duplicates and every domain whose parent domain is also
 // present (e.g. "www.google.com" when "google.com" or "com" exists).
-// It returns the sorted kept and removed domains.
+// Kept domains are sorted alphabetically; removed domains are sorted by their
+// reversed string so that subdomains of the same parent are grouped together.
 func Deduplicate(domains []string) (kept, removed []string) {
 	set := make(map[string]struct{}, len(domains))
 	for _, d := range domains {
@@ -63,7 +72,9 @@ func Deduplicate(domains []string) (kept, removed []string) {
 		}
 	}
 	sort.Strings(kept)
-	sort.Strings(removed)
+	slices.SortFunc(removed, func(a, b string) int {
+		return strings.Compare(reverse(a), reverse(b))
+	})
 	return kept, removed
 }
 
@@ -75,4 +86,10 @@ func hasParent(d string, set map[string]struct{}) bool {
 		}
 	}
 	return false
+}
+
+func reverse(s string) string {
+	b := []byte(s)
+	slices.Reverse(b)
+	return string(b)
 }
