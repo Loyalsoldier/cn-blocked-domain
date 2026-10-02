@@ -26,7 +26,7 @@ jobs:
           go run ./
 
       - name: Release and upload assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ env.RELEASE_NAME }}
           tag_name: ${{ env.TAG_NAME }}
