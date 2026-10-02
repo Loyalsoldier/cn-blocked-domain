@@ -9,6 +9,8 @@ func TestNormalize(t *testing.T) {
 	cases := map[string]string{
 		"WWW.Google.COM": "www.google.com", " example.org. ": "example.org", "com": "com", "a-b.io": "a-b.io",
 		"": "", "-a.com": "", "a..com": "", "1.2.3.4": "", "exa mple.com": "", "例子.com": "xn--fsqu00a.com", "Bücher.DE": "xn--bcher-kva.de", "a_b.com": "",
+		"İ.com": "xn--i-9bb.com", "bu\u0308cher.de": "xn--bcher-kva.de", "例子。COM。": "xn--fsqu00a.com",
+		"💩.la": "xn--ls8h.la", "xn--ls8h.la": "xn--ls8h.la", "a\u200db.com": "", "xn--.com": "",
 	}
 	for in, want := range cases {
 		got, ok := Normalize(in)

@@ -12,8 +12,11 @@ import (
 // Normalize trims s, converts internationalized names to lower-cased punycode
 // (e.g. "例子.com" to "xn--fsqu00a.com"), and reports whether it is a valid domain name.
 func Normalize(s string) (string, bool) {
-	d := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(s)), ".")
-	d, err := idna.Registration.ToASCII(d)
+	d, err := idna.Lookup.ToUnicode(strings.TrimSpace(s))
+	if err != nil {
+		return "", false
+	}
+	d, err = idna.Registration.ToASCII(strings.TrimSuffix(d, "."))
 	if err != nil {
 		return "", false
 	}

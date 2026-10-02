@@ -37,7 +37,7 @@ type Client struct {
 	HTTPClient *http.Client
 	// Parallel is the maximum number of pages fetched at a time.
 	Parallel int
-	// Delay is the interval between starting two consecutive requests.
+	// Delay is the interval between starting pages within a batch.
 	Delay time.Duration
 	// Retries is the number of extra attempts for a failed page.
 	Retries int
@@ -65,18 +65,20 @@ func (c *Client) FetchAll(ctx context.Context) ([]string, error) {
 	}
 	results := collect(first)
 
-	var offsets []int
-	limit := first.Total
-	if c.MaxPages > 0 {
-		limit = min(limit, c.MaxPages*PageSize)
+	pageCount := first.Total / PageSize
+	if first.Total%PageSize != 0 {
+		pageCount++
 	}
-	for off := PageSize; off < limit; off += PageSize {
-		offsets = append(offsets, off)
+	if c.MaxPages > 0 {
+		pageCount = min(pageCount, c.MaxPages)
 	}
 
 	parallel := max(c.Parallel, 1)
-	for start := 0; start < len(offsets); start += parallel {
-		batch := offsets[start:min(start+parallel, len(offsets))]
+	for start := 1; start < pageCount; {
+		batch := make([]int, min(parallel, pageCount-start))
+		for i := range batch {
+			batch[i] = (start + i) * PageSize
+		}
 		pages, err := c.fetchBatch(ctx, batch)
 		if err != nil {
 			return nil, err
@@ -84,6 +86,7 @@ func (c *Client) FetchAll(ctx context.Context) ([]string, error) {
 		for _, p := range pages {
 			results = append(results, collect(p)...)
 		}
+		start += len(batch)
 	}
 	return results, nil
 }
@@ -97,6 +100,7 @@ func (c *Client) fetchBatch(ctx context.Context, offsets []int) ([]*Page, error)
 	for i, off := range offsets {
 		if i > 0 {
 			if err := sleep(ctx, c.Delay); err != nil {
+				wg.Wait()
 				return nil, err
 			}
 		}
@@ -156,11 +160,23 @@ func (c *Client) fetchPage(ctx context.Context, offset int) (*Page, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}
-	var p Page
+	var p struct {
+		Total *int   `json:"total"`
+		Items []Item `json:"items"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 		return nil, fmt.Errorf("decode JSON: %w", err)
 	}
-	return &p, nil
+	if p.Total == nil || *p.Total < 0 || p.Items == nil {
+		return nil, fmt.Errorf("invalid page: expected a non-negative total and an items array")
+	}
+	if offset > 0 && offset >= *p.Total {
+		return nil, fmt.Errorf("invalid page: offset %d is outside total %d", offset, *p.Total)
+	}
+	if want := min(PageSize, *p.Total-offset); len(p.Items) != want {
+		return nil, fmt.Errorf("incomplete page: got %d items, want %d", len(p.Items), want)
+	}
+	return &Page{Total: *p.Total, Items: p.Items}, nil
 }
 
 func collect(p *Page) []string {
