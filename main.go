@@ -1,48 +1,101 @@
+// Command cn-blocked-domain aggregates domains and IPs blocked in mainland China
+// as reported by GreatFire Analyzer.
 package main
 
 import (
+	"bufio"
+	"context"
 	"flag"
+	"fmt"
 	"log"
+	"net/netip"
 	"os"
+	"os/signal"
+	"path/filepath"
+
+	"github.com/Loyalsoldier/cn-blocked-domain/internal/domain"
+	"github.com/Loyalsoldier/cn-blocked-domain/internal/greatfire"
+	"github.com/Loyalsoldier/cn-blocked-domain/internal/ipaddr"
 )
 
-var configFile = flag.String("c", "config.yaml", "Path to the configuration file, supports YAML and JSON.")
-
-func init() {
-	flag.Parse()
-}
+const (
+	domainsFile      = "domains.txt"
+	ipFile           = "ip.txt"
+	deduplicatedFile = "deduplicated-domains.txt"
+)
 
 func main() {
-	rawConfig := new(RawConfig)
-	config := new(Config)
+	parallel := flag.Int("parallel", 10, "maximum number of pages to request at a time")
+	outDir := flag.String("outdir", "publish", "directory to write output files to")
+	flag.Parse()
 
-	if err := rawConfig.ParseRawConfig(*configFile); err != nil {
-		log.Fatal(err)
-		os.Exit(1)
+	if *parallel < 1 {
+		log.Fatal("-parallel must be at least 1")
 	}
 
-	if err := config.GenerateConfig(rawConfig); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	if err := run(ctx, greatfire.NewClient(*parallel), *outDir); err != nil {
 		log.Fatal(err)
-		os.Exit(2)
+	}
+}
+
+func run(ctx context.Context, client *greatfire.Client, outDir string) error {
+	entries, err := client.FetchAll(ctx)
+	if err != nil {
+		return err
+	}
+	log.Printf("fetched %d entries", len(entries))
+
+	var domains []string
+	var prefixes []netip.Prefix
+	invalid := 0
+	for _, e := range entries {
+		if p, ok := ipaddr.Parse(e); ok {
+			prefixes = append(prefixes, p)
+		} else if d, ok := domain.Normalize(e); ok {
+			domains = append(domains, d)
+		} else {
+			invalid++
+		}
 	}
 
-	if err := config.SetNumCPU(); err != nil {
-		log.Fatal(err)
-		os.Exit(3)
-	}
+	kept, removed := domain.Deduplicate(domains)
+	cidrs := ipaddr.Aggregate(prefixes)
+	log.Printf("domains: %d, deduplicated: %d, CIDRs: %d, invalid: %d", len(kept), len(removed), len(cidrs), invalid)
 
-	for err := range config.CrawlMaxPage() {
-		log.Fatal(err)
-		os.Exit(4)
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return err
 	}
-
-	if err := config.GenerateCrawlList(); err != nil {
-		log.Fatal(err)
-		os.Exit(5)
+	ipLines := make([]string, len(cidrs))
+	for i, c := range cidrs {
+		ipLines[i] = c.String()
 	}
+	for name, lines := range map[string][]string{
+		domainsFile:      kept,
+		deduplicatedFile: removed,
+		ipFile:           ipLines,
+	} {
+		if err := writeLines(filepath.Join(outDir, name), lines); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-	maxCap := config.Customize.MaxCapacity
-	rawResultChan := make(chan map[*string]int, maxCap)
-	go config.Crawl(rawResultChan)
-	config.FilterAndWrite(rawResultChan)
+func writeLines(path string, lines []string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	w := bufio.NewWriter(f)
+	for _, l := range lines {
+		fmt.Fprintln(w, l)
+	}
+	if err := w.Flush(); err != nil {
+		f.Close()
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return f.Close()
 }
