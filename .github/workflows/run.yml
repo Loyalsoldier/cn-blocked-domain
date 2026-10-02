@@ -40,6 +40,17 @@ jobs:
           name: publish
           path: ./publish/
 
+      - name: Upload invalid entries to artifacts
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: invalid
+          path: ./publish/invalid.txt
+
+      - name: Exclude invalid entries from published files
+        if: github.event_name != 'pull_request'
+        run: rm -f ./publish/invalid.txt
+
       - name: Set variables
         if: github.event_name != 'pull_request'
         run: |

@@ -25,6 +25,8 @@
 - `-pages`：最多爬取的页数（每页 200 条），默认 `0` 表示爬取全部
 - `-outdir`：输出目录，默认 `publish`
 
+输出目录中的 `invalid.txt` 包含无法识别为合法域名或 IP 的条目，仅上传至 GitHub Artifacts，不会发布到 Release 或 `release` 分支。
+
 例如：`go run ./ -parallel 5 -outdir ./output`
 
 ## 使用本项目的项目

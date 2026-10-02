@@ -8,10 +8,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 
 	"github.com/Loyalsoldier/cn-blocked-domain/internal/domain"
 	"github.com/Loyalsoldier/cn-blocked-domain/internal/greatfire"
@@ -22,6 +24,7 @@ const (
 	domainsFile      = "domains.txt"
 	ipFile           = "ip.txt"
 	deduplicatedFile = "deduplicated-domains.txt"
+	invalidFile      = "invalid.txt"
 )
 
 func main() {
@@ -56,20 +59,21 @@ func run(ctx context.Context, client *greatfire.Client, outDir string) error {
 
 	var domains []string
 	var prefixes []netip.Prefix
-	invalid := 0
+	invalidSet := make(map[string]struct{})
 	for _, e := range entries {
 		if p, ok := ipaddr.Parse(e); ok {
 			prefixes = append(prefixes, p)
 		} else if d, ok := domain.Normalize(e); ok {
 			domains = append(domains, d)
 		} else {
-			invalid++
+			invalidSet[e] = struct{}{}
 		}
 	}
+	invalid := slices.Sorted(maps.Keys(invalidSet))
 
 	kept, removed := domain.Deduplicate(domains)
 	cidrs := ipaddr.Aggregate(prefixes)
-	log.Printf("domains: %d, deduplicated: %d, CIDRs: %d, invalid: %d", len(kept), len(removed), len(cidrs), invalid)
+	log.Printf("domains: %d, deduplicated: %d, CIDRs: %d, invalid: %d", len(kept), len(removed), len(cidrs), len(invalid))
 
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return err
@@ -82,6 +86,7 @@ func run(ctx context.Context, client *greatfire.Client, outDir string) error {
 		domainsFile:      kept,
 		deduplicatedFile: removed,
 		ipFile:           ipLines,
+		invalidFile:      invalid,
 	} {
 		if err := writeLines(filepath.Join(outDir, name), lines); err != nil {
 			return err
