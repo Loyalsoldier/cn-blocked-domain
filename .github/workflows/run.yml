@@ -1,50 +1,95 @@
-name: Crawl blocked domains and ips from Greatfire Analyzer
+name: Crawl blocked domains and IPs from GreatFire Analyzer
+
 on:
+  pull_request:
   workflow_dispatch:
   schedule:
-    - cron: "0 20 * * *"
+    - cron: "0 20 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   crawl:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-      - name: Setup Go 1.x.y
-        uses: actions/setup-go@v2
+      - name: Checkout codebase
+        uses: actions/checkout@v4.2.2
         with:
-          go-version: ^1.16.3
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v5.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Test and build
+        run: |
+          go vet ./...
+          go test -race ./...
+          go build -o "$RUNNER_TEMP/cn-blocked-domain" .
+
+      - name: Crawl blocked domains and IPs
+        run: '"$RUNNER_TEMP/cn-blocked-domain" -output-dir publish'
+
+      - name: Store lists for publishing
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: blocked-lists
+          path: publish/*.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: crawl
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download generated lists
+        uses: actions/download-artifact@v4.3.0
+        with:
+          name: blocked-lists
+          path: publish
 
       - name: Set variables
         run: |
           echo "RELEASE_NAME=Released on $(date +%Y%m%d%H%M)" >> $GITHUB_ENV
           echo "TAG_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Checkout codebase
-        uses: actions/checkout@v2.3.4
-
-      - name: Get project dependencies & run
-        run: |
-          go run ./
 
       - name: Release and upload assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2.4.1
         with:
           name: ${{ env.RELEASE_NAME }}
           tag_name: ${{ env.TAG_NAME }}
+          target_commitish: ${{ github.sha }}
           draft: false
           prerelease: false
+          fail_on_unmatched_files: true
           files: |
-            ./publish/*
+            publish/*.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Git push assets to "release" branch
+        working-directory: publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd publish || exit 1
           git init
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b release
-          git add .
-          git commit -m "${{ env.RELEASE_NAME }}"
-          git remote add publish "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git add -- domains.txt deduplicated-domains.txt ip.txt
+          git commit -m "$RELEASE_NAME"
+          git remote add publish "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push -f -u publish release
