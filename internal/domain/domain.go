@@ -13,7 +13,7 @@ import (
 // (e.g. "例子.com" to "xn--fsqu00a.com"), and reports whether it is a valid domain name.
 func Normalize(s string) (string, bool) {
 	d := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(s)), ".")
-	d, err := idna.ToASCII(d)
+	d, err := idna.Registration.ToASCII(d)
 	if err != nil {
 		return "", false
 	}
