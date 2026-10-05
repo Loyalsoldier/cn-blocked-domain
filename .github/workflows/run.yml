@@ -30,7 +30,7 @@ jobs:
       - name: Run
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            go run ./ -outdir ./publish -parallel 10 -pages 200
+            go run ./ -outdir ./publish -parallel 10 -pages 100
           else
             go run ./ -outdir ./publish -parallel 10
           fi
