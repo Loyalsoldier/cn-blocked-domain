@@ -160,6 +160,7 @@ func (c *Client) fetchPage(ctx context.Context, offset int) (*Page, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}
+
 	var p Page
 	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 		return nil, fmt.Errorf("decode JSON: %w", err)
@@ -173,7 +174,7 @@ func (c *Client) fetchPage(ctx context.Context, offset int) (*Page, error) {
 	if want := min(PageSize, p.Total-offset); len(p.Items) != want {
 		return nil, fmt.Errorf("incomplete page: got %d items, want %d", len(p.Items), want)
 	}
-	return &Page{Total: p.Total, Items: p.Items}, nil
+	return &p, nil
 }
 
 func collect(p *Page) []string {
