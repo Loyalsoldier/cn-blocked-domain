@@ -145,7 +145,7 @@ func (c *Client) fetchPage(ctx context.Context, offset int) (*Page, error) {
 	q.Set("limit", strconv.Itoa(PageSize))
 	q.Set("offset", strconv.Itoa(offset))
 	u.RawQuery = q.Encode()
-	log.Printf("Crawling: %s", u)
+	log.Printf("Fetching: %s", u)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -160,23 +160,20 @@ func (c *Client) fetchPage(ctx context.Context, offset int) (*Page, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}
-	var p struct {
-		Total *int   `json:"total"`
-		Items []Item `json:"items"`
-	}
+	var p Page
 	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 		return nil, fmt.Errorf("decode JSON: %w", err)
 	}
-	if p.Total == nil || *p.Total < 0 || p.Items == nil {
+	if p.Total < 0 || p.Items == nil {
 		return nil, fmt.Errorf("invalid page: expected a non-negative total and an items array")
 	}
-	if offset > 0 && offset >= *p.Total {
-		return nil, fmt.Errorf("invalid page: offset %d is outside total %d", offset, *p.Total)
+	if offset > 0 && offset >= p.Total {
+		return nil, fmt.Errorf("invalid page: offset %d is outside total %d", offset, p.Total)
 	}
-	if want := min(PageSize, *p.Total-offset); len(p.Items) != want {
+	if want := min(PageSize, p.Total-offset); len(p.Items) != want {
 		return nil, fmt.Errorf("incomplete page: got %d items, want %d", len(p.Items), want)
 	}
-	return &Page{Total: *p.Total, Items: p.Items}, nil
+	return &Page{Total: p.Total, Items: p.Items}, nil
 }
 
 func collect(p *Page) []string {
