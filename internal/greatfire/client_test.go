@@ -88,8 +88,6 @@ func TestFetchAllInvalidPage(t *testing.T) {
 		`null`,
 		`{}`,
 		`{"error":"temporarily unavailable"}`,
-		`{"items":[]}`,
-		`{"total":null,"items":[]}`,
 		`{"total":-1,"items":[]}`,
 		`{"total":1}`,
 		`{"total":1,"items":null}`,

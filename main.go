@@ -106,7 +106,7 @@ func writeLines(path string, lines []string) error {
 	}
 	if err := w.Flush(); err != nil {
 		f.Close()
-		return fmt.Errorf("write %s: %w", path, err)
+		return fmt.Errorf("Write %s: %w", path, err)
 	}
 	return f.Close()
 }
