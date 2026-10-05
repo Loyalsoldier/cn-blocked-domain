@@ -161,10 +161,17 @@ func (c *Client) fetchPage(ctx context.Context, offset int) (*Page, error) {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}
 
-	var p Page
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+	var raw struct {
+		Total *int   `json:"total"`
+		Items []Item `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("decode JSON: %w", err)
 	}
+	if raw.Total == nil {
+		return nil, fmt.Errorf("invalid page: missing total")
+	}
+	p := Page{Total: *raw.Total, Items: raw.Items}
 	if p.Total < 0 || p.Items == nil {
 		return nil, fmt.Errorf("invalid page: expected a non-negative total and an items array")
 	}
