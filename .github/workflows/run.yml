@@ -2,42 +2,69 @@ name: Crawl blocked domains and ips from Greatfire Analyzer
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 20 * * *"
+    - cron: "0 0 * * 0" # Every Sunday at 00:00 UTC
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - "**/README.md"
 jobs:
-  crawl:
+  aggregate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Setup Go 1.x.y
-        uses: actions/setup-go@v2
+      - name: Checkout codebase
+        uses: actions/checkout@v7
         with:
-          go-version: ^1.16.3
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: ./go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Run
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            go run ./ -outdir ./publish -parallel 10 -pages 100
+          else
+            go run ./ -outdir ./publish -parallel 10
+          fi
+
+      - name: Upload artifacts
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: publish
+          path: ./publish/
+
+      - name: Exclude invalid entries from published files
+        if: github.event_name != 'pull_request'
+        run: rm -f ./publish/invalid.txt
 
       - name: Set variables
+        if: github.event_name != 'pull_request'
         run: |
           echo "RELEASE_NAME=Released on $(date +%Y%m%d%H%M)" >> $GITHUB_ENV
           echo "TAG_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
         shell: bash
 
-      - name: Checkout codebase
-        uses: actions/checkout@v2.3.4
-
-      - name: Get project dependencies & run
-        run: |
-          go run ./
-
       - name: Release and upload assets
-        uses: softprops/action-gh-release@v1
+        if: github.event_name != 'pull_request'
+        uses: svenstaro/upload-release-action@v2
         with:
-          name: ${{ env.RELEASE_NAME }}
-          tag_name: ${{ env.TAG_NAME }}
-          draft: false
-          prerelease: false
-          files: |
-            ./publish/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          release_name: ${{ env.RELEASE_NAME }}
+          tag: ${{ env.TAG_NAME }}
+          file_glob: true
+          file: ./publish/*
 
       - name: Git push assets to "release" branch
+        if: github.event_name != 'pull_request'
         run: |
           cd publish || exit 1
           git init
