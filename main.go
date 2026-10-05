@@ -55,7 +55,7 @@ func run(ctx context.Context, client *greatfire.Client, outDir string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("fetched %d entries", len(entries))
+	log.Printf("Fetched %d entries", len(entries))
 
 	var domains []string
 	var prefixes []netip.Prefix
@@ -106,7 +106,7 @@ func writeLines(path string, lines []string) error {
 	}
 	if err := w.Flush(); err != nil {
 		f.Close()
-		return fmt.Errorf("write %s: %w", path, err)
+		return fmt.Errorf("Write %s: %w", path, err)
 	}
 	return f.Close()
 }
